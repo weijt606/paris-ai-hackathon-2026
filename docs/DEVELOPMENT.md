@@ -77,7 +77,7 @@ const res = await fetch("/api/chat", {
 const { text, provider } = await res.json();
 ```
 
-The router tries the requested provider first, then falls back to the other. Berlin lesson: don't rely on a single provider being up during a demo.
+The router tries the requested provider first, then falls back to the other. Don't rely on a single provider being up during a demo.
 
 ### Image generation
 
@@ -362,7 +362,7 @@ refactor: extract retry logic from anthropic adapter
 
 ---
 
-## 8. Anti-patterns (Berlin retro lessons)
+## 8. Anti-patterns
 
 | Anti-pattern | Why it bites | What to do instead |
 |---|---|---|

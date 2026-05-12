@@ -14,8 +14,8 @@ interface TranscriptResponse {
  * Mic → /api/stt component. Captures audio from the browser, posts it to the
  * Gradium-backed STT route, and displays the transcript.
  *
- * Berlin retro lesson: keep a sponsor "on/off" toggle so the demo can fall back
- * to raw audio if enhancement hurts STT accuracy. Add that on event day if needed.
+ * Tip: if your track depends on STT quality, add a sponsor enhancement on/off
+ * toggle so you can fall back to raw audio when enhancement hurts accuracy.
  */
 export function MicCapture() {
   const [status, setStatus] = useState<Status>("idle");

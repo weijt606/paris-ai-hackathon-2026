@@ -23,7 +23,7 @@ This file is loaded into every Claude Code session in this repo.
 Pre-event:
 1. `pnpm install` (do this BEFORE the event — don't waste sprint time on dependency resolution)
 2. `cp .env.example .env.local` and fill in sponsor keys received from organizers
-3. `pnpm check:env` to verify each key actually works (Berlin lesson: don't trust "key present" — verify it pings)
+3. `pnpm check:env` to verify each key actually works — don't trust "key present"; verify it pings
 4. `pnpm dev` and confirm `/api/health` shows all sponsors `configured: true`
 5. Set `NEXT_PUBLIC_DEMO_MODE=true` and re-test end-to-end on fixtures alone — this is the rehearsal fallback
 
@@ -108,7 +108,7 @@ Run `git diff --cached` and scan for tokens before committing. If unsure, ask.
 
 ### Rule H2 — Sponsor adapters are gated
 Every sponsor call must go through `src/lib/{ai,media,voice}/`. Missing keys must return 503,
-not crash. Berlin lesson: rate limits and outages happen during demos.
+not crash. Rate limits and outages happen during demos — assume the worst.
 
 ### Rule H3 — Demo mode is sacred
 `NEXT_PUBLIC_DEMO_MODE=true` must always produce a functional end-to-end flow against

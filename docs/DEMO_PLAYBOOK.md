@@ -2,17 +2,17 @@
 
 Paris is a **live demo**, not a Loom upload. You stand in front of judges, hit "play," and tell a story in ~2 minutes.
 
-## What worked in Berlin
+## What works
 
-- **Approaching judges for a second in-person demo** — saved our Top 3 placement. Don't passively wait for results.
+- **Approach judges for a second in-person demo** — initial submissions are easy to miss. Don't passively wait for results.
 - **Deep sponsor integration** — judges see effort. One sponsor used deeply > three sponsors used shallow.
 - **A clear "wow" moment in the first 15 seconds** — judges form an opinion fast. Don't bury the lede.
 
-## What didn't work
+## What doesn't work
 
-- **Preview/beta APIs in the demo path** — rate-limited mid-demo. Switch to GA before submission.
-- **Sponsor APIs taken on faith** — enhancement that helps marketing demos may hurt your scenario. A/B test before betting on it.
-- **Ad-hoc demo with no script** — recorded almost ad-libbed. Two minutes is short; every 10 seconds must be designed.
+- **Preview/beta APIs in the demo path** — they rate-limit mid-demo. Switch to GA before submission.
+- **Sponsor APIs taken on faith** — an enhancement that helps marketing demos may hurt your scenario. A/B test before betting on it.
+- **Ad-hoc demo with no script** — two minutes is short; every 10 seconds must be designed.
 
 ## The 2-minute script template
 
@@ -31,7 +31,7 @@ Paris is a **live demo**, not a Loom upload. You stand in front of judges, hit "
 
 1:15 – 1:45  WHY IT MATTERS
   - Who uses this, what changes for them.
-  - Social/emotional resonance — Berlin's winner won on this dimension.
+  - Social/emotional resonance — products judges feel emotionally tend to outscore purely technical ones.
 
 1:45 – 2:00  CLOSE
   - What's next (one sentence).
@@ -39,6 +39,8 @@ Paris is a **live demo**, not a Loom upload. You stand in front of judges, hit "
 ```
 
 Practice this script three times **out loud**. Time it. If you go over 2 minutes, cut content.
+
+> Social/emotional resonance is a hidden scoring dimension. Products judges feel emotionally tend to outscore products that are merely technically impressive.
 
 ## Pre-demo checklist (T-1 hour)
 
@@ -60,9 +62,9 @@ If something breaks on stage:
 1. **Don't apologize for >2 seconds.** "Quick fix — meanwhile let me tell you about X."
 2. **Switch to demo mode if needed.** `DEMO_MODE=true` should always work. That's the contract.
 3. **Pivot to the why.** If the demo dies, the *story* still matters. Sell the vision.
-4. **Offer a second demo.** "Happy to show this live again after the session." Berlin showed this works.
+4. **Offer a second demo.** "Happy to show this live again after the session." Hackathons are social — a second pass often saves a borderline submission.
 
 ## Post-demo
 
 - Talk to judges. Hackathons are social — your network from this event is the real prize.
-- Note what other teams built — informs strategy for the next event (UCWS Singapore is 30 days; very different game).
+- Note what other teams built — useful pattern intel for future hackathons.

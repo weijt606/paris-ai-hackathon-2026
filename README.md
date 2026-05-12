@@ -87,7 +87,7 @@ scripts/check-env.ts                                # pre-flight key check
 - [`docs/IDEAS.md`](docs/IDEAS.md) — Shared ideas board. Drop your concepts here before we decide on event day.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — Why this shape, what's intentionally absent
 - [`docs/SPONSORS.md`](docs/SPONSORS.md) — Per-sponsor integration notes + gotchas
-- [`docs/DEMO_PLAYBOOK.md`](docs/DEMO_PLAYBOOK.md) — Live-demo dos and don'ts (Berlin lessons)
+- [`docs/DEMO_PLAYBOOK.md`](docs/DEMO_PLAYBOOK.md) — Live-demo dos and don'ts
 - [`docs/TRACK_PIVOT_KIT.md`](docs/TRACK_PIVOT_KIT.md) — How to fork the template on event day
 
 ## License

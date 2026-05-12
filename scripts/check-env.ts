@@ -1,8 +1,8 @@
 #!/usr/bin/env tsx
 /**
  * Pre-flight check — run before the hackathon to verify every sponsor key
- * actually works (not just present). Catches the Berlin "Gemini preview API
- * rate-limited mid-demo" class of bug.
+ * actually works (not just present). Catches the "preview API rate-limited
+ * mid-demo" class of bug.
  *
  * Usage:
  *   pnpm check:env

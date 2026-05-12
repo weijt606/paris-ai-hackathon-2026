@@ -8,7 +8,7 @@ Confirmed at the event: OpenAI, Anthropic, Fal, Gradium, Slng.ai. Free credits h
 - **Route:** `POST /api/chat` (provider=openai)
 - **Env:** `OPENAI_API_KEY`, `OPENAI_MODEL` (default `gpt-4o-mini`)
 - **Notes:**
-  - Bump `OPENAI_MODEL` to whatever GA model is current on the day. Avoid preview/beta in the demo path (Berlin lesson).
+  - Bump `OPENAI_MODEL` to whatever GA model is current on the day. Avoid preview/beta in the demo path — they rate-limit and break unexpectedly.
   - For structured output, use `response_format: { type: "json_schema", json_schema: {...} }` directly via the client — the adapter exposes the raw OpenAI SDK so you can extend.
 
 ## Anthropic
@@ -38,7 +38,7 @@ Confirmed at the event: OpenAI, Anthropic, Fal, Gradium, Slng.ai. Free credits h
 - **Notes:**
   - Endpoints assumed: `POST /v1/stt` (multipart `audio` field) and `POST /v1/tts` (JSON body).
   - **Verify on event day** — adjust paths/headers once the sponsor confirms their REST surface.
-  - Berlin lesson: an enhancement model that helps clean speech may **hurt** STT for short/staccato commands. Add an A/B toggle in your UI if voice quality matters.
+  - A speech-enhancement model that helps clean dialogue can actually **hurt** STT for short or staccato commands. Add an A/B toggle in your UI if voice quality matters, and verify with your own data — sponsor marketing demos may not match your scenario.
 
 ## Slng.ai (real-time voice agents)
 
@@ -48,9 +48,9 @@ Confirmed at the event: OpenAI, Anthropic, Fal, Gradium, Slng.ai. Free credits h
   - Only `createAgent` is stubbed (REST). For full real-time, ask for their official SDK at check-in — it's likely WebRTC- or WebSocket-based.
   - If your track uses voice agents, pair Slng.ai with Gradium TTS for output and OpenAI/Anthropic for reasoning.
 
-## Multi-sponsor strategy (Berlin lesson)
+## Multi-sponsor strategy
 
-Berlin's overall winner combined **two sponsors deeply** (telli + ai-coustics) on a high-emotional-resonance product. Track winners typically integrate ≥2 sponsors. For Paris, prefer products that naturally combine:
+Track winners typically integrate **≥2 sponsors deeply** on a high-emotional-resonance product. Prefer combinations that feel natural:
 
 - **Fal + OpenAI/Anthropic** → multimodal content (text → image → narrative)
 - **Gradium + Anthropic/OpenAI** → voice-in/voice-out agent

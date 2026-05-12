@@ -8,9 +8,8 @@ import * as anthropic from "@/lib/ai/anthropic";
  * Provider-agnostic chat router.
  *
  * Tries the requested provider first; falls back to the other configured
- * provider so the demo path doesn't die on rate-limit / outage. Berlin retro
- * (see project_berlin_retro memory) taught us to wire fallbacks BEFORE the
- * sprint, not during.
+ * provider so the demo path doesn't die on rate-limit / outage. Wire fallbacks
+ * BEFORE the sprint, not during.
  */
 export type Provider = "openai" | "anthropic";
 
