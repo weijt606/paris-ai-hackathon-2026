@@ -11,14 +11,14 @@ import { RegionalRiskChart } from "@/components/wine/charts/RegionalRiskChart";
 import { SentimentDonut } from "@/components/wine/charts/SentimentDonut";
 import { ExportButton } from "@/components/wine/shared/ExportButton";
 import { SubscribeDialog } from "@/components/wine/shared/SubscribeDialog";
+import { TimeframePicker } from "@/components/wine/shared/TimeframePicker";
 import { BORDEAUX_BENCHMARKS } from "@/lib/wine/bordeaux-benchmarks";
-import type { AnalyzeInput, AnalyzeResult } from "@/lib/wine/types";
+import type { AnalyzeInput, AnalyzeResult, Timeframe } from "@/lib/wine/types";
 
-function defaultTimeframe() {
-  const now = new Date();
-  const start = now.toISOString().slice(0, 10);
-  const end = new Date(now.getTime() + 90 * 24 * 3600 * 1000).toISOString().slice(0, 10);
-  return { start, end };
+function defaultTimeframe(): Timeframe {
+  // Default: current calendar (natural) year forecast.
+  const year = new Date().getFullYear();
+  return { start: `${year}-01-01`, end: `${year}-12-31` };
 }
 
 export function TradeDashboard() {
@@ -80,35 +80,12 @@ export function TradeDashboard() {
           />
 
           <div className="rounded-xl border p-4 print:hidden">
-            <div className="grid grid-cols-2 gap-3">
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                  {t("common.start_date")}
-                </span>
-                <input
-                  type="date"
-                  value={timeframe.start}
-                  onChange={(e) => setTimeframe((tf) => ({ ...tf, start: e.target.value }))}
-                  className="rounded-md border bg-background px-3 py-2 text-sm"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                  {t("common.end_date")}
-                </span>
-                <input
-                  type="date"
-                  value={timeframe.end}
-                  onChange={(e) => setTimeframe((tf) => ({ ...tf, end: e.target.value }))}
-                  className="rounded-md border bg-background px-3 py-2 text-sm"
-                />
-              </label>
-            </div>
+            <TimeframePicker value={timeframe} onChange={setTimeframe} />
             <button
               type="button"
               onClick={run}
               disabled={loading}
-              className="mt-4 w-full rounded-md bg-foreground px-4 py-2.5 text-sm font-medium text-background hover:opacity-90 disabled:opacity-50"
+              className="mt-3 w-full rounded-md bg-foreground px-4 py-2.5 text-sm font-medium text-background hover:opacity-90 disabled:opacity-50"
             >
               {loading
                 ? t("common.running")
