@@ -36,7 +36,7 @@ export function UploadArea({ uploads, onChange }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex h-full flex-col gap-2">
       <div className="flex items-baseline justify-between">
         <span className="text-[10px] uppercase tracking-luxe text-muted-foreground">
           {t("vineyard.upload.title")}
@@ -60,15 +60,13 @@ export function UploadArea({ uploads, onChange }: Props) {
           addFiles(e.dataTransfer.files);
         }}
         className={cn(
-          "cursor-pointer rounded-sm border border-dashed px-4 py-5 text-center text-xs transition",
+          "flex flex-1 cursor-pointer items-center justify-center rounded-sm border border-dashed px-4 py-5 text-center text-xs transition",
           dragging
             ? "border-foreground bg-muted/50"
             : "border-border text-muted-foreground hover:border-foreground/40 hover:bg-muted/30",
         )}
       >
-        {uploads.length === 0
-          ? t("vineyard.upload.hint")
-          : t("vineyard.upload.hint")}
+        <span>{t("vineyard.upload.hint")}</span>
         <input
           ref={inputRef}
           type="file"

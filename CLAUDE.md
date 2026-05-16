@@ -10,7 +10,8 @@ This file is loaded into every Claude Code session in this repo.
 - **Sponsors:** OpenAI · Tavily · Pioneer.ai
 - **Architecture:** Orchestrator agent (OpenAI Chat Completions tool-use loop) → weather/geo/tavily sub-agents → extraction_agent → dashboard. Pioneer.ai GLiNER2 classifier consumed via `classify()` from extraction / feature agents.
 - **Repo visibility:** Shared with teammates AND hackathon organizers — never commit secrets or PII.
-- **Collab doc:** [`docs/AGENTS.zh.md`](docs/AGENTS.zh.md) — assignments, contracts, recipes (Chinese).
+- **Collab doc:** [`docs/AGENTS.md`](docs/AGENTS.md) — architecture, file map, SubAgent contract.
+- **Sponsor doc:** [`docs/SPONSORS.md`](docs/SPONSORS.md) — OpenAI / Tavily / Pioneer.ai usage + degradation ladder.
 
 ## Stack
 

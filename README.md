@@ -264,18 +264,19 @@ src/
 │   └── utils.ts                   # cn() + SponsorUnavailableError
 data/
 └── wine-vintage-quality-schema.json   # 499-line scoring schema (extraction context)
-docs/AGENTS.zh.md                      # collab guide (Chinese)
+docs/AGENTS.md                         # agent-layer guide (architecture, contract, file map)
+docs/SPONSORS.md                       # OpenAI · Tavily · Pioneer.ai integration details
 scripts/check-env.ts                   # pre-flight key check
 CLAUDE.md                              # project rules (loaded into every AI session)
 ```
 
 ## API contract
 
-`POST /api/analyze` — see [`docs/AGENTS.zh.md` §8](docs/AGENTS.zh.md) for the full request/response shape. The response now includes `qualityBand`, `activeGates`, `rationale`, and a `feature` object with `executiveSummary` / `reportMarkdown` / `emailDigest`. Demo-mode and missing-key fallbacks return `isDemoOrPartial: true`.
+`POST /api/analyze` — see [`docs/AGENTS.md` §5](docs/AGENTS.md) for the full request/response shape. The response now includes `qualityBand`, `activeGates`, `rationale`, and a `feature` object with `executiveSummary` / `reportMarkdown` / `emailDigest`. Demo-mode and missing-key fallbacks return `isDemoOrPartial: true`.
 
 ## For collaborators
 
-Read [`docs/AGENTS.zh.md`](docs/AGENTS.zh.md) first — it lays out who owns which sub-agent, the SubAgent contract, the 4-step recipe to replace a stub, and the PR checklist.
+Read [`docs/AGENTS.md`](docs/AGENTS.md) first — it lays out the file map, the SubAgent contract, what each sub-agent actually does today, and the PR checklist. For sponsor-specific wiring (OpenAI, Tavily, Pioneer.ai), see [`docs/SPONSORS.md`](docs/SPONSORS.md).
 
 ## UI
 

@@ -113,8 +113,8 @@ export function VineyardDashboard() {
           <TimeframePicker value={timeframe} onChange={setTimeframe} />
         </div>
 
-        <div className="mt-6 grid gap-6 md:grid-cols-2">
-          <label className="flex flex-col gap-2 text-sm">
+        <div className="mt-6 grid items-stretch gap-6 md:grid-cols-2">
+          <label className="flex h-full flex-col gap-2 text-sm">
             <span className="text-[10px] uppercase tracking-luxe text-muted-foreground">
               {t("common.question")}
             </span>
@@ -123,10 +123,12 @@ export function VineyardDashboard() {
               onChange={(e) => setQuestion(e.target.value)}
               rows={4}
               placeholder={t("common.question_placeholder")}
-              className="min-h-[7.5rem] flex-1 resize-none rounded-sm border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              className="flex-1 resize-none rounded-sm border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </label>
-          <UploadArea uploads={uploads} onChange={setUploads} />
+          <div className="flex h-full flex-col">
+            <UploadArea uploads={uploads} onChange={setUploads} />
+          </div>
         </div>
 
         <div className="mt-8 flex flex-col gap-3 border-t pt-6 md:flex-row md:items-center md:justify-between">
