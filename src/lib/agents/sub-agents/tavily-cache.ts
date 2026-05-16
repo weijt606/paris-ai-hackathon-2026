@@ -14,6 +14,8 @@ export type TavilyCacheResult = {
 
 type CacheKeyInput = {
   region: string;
+  regionScope?: string;
+  chateau?: string;
   year: number;
   sourceType: string;
   query: string;
@@ -29,10 +31,12 @@ let database: import("node:sqlite").DatabaseSync | null | undefined;
 
 export function buildTavilyCacheKey(input: CacheKeyInput): string {
   const stable = JSON.stringify({
-    region: input.region,
+    region: input.region.trim().toLowerCase(),
+    regionScope: (input.regionScope ?? "").trim().toLowerCase(),
+    chateau: (input.chateau ?? "").trim().toLowerCase(),
     year: input.year,
     sourceType: input.sourceType,
-    query: input.query,
+    query: input.query.trim().toLowerCase(),
     maxResultsPerQuery: input.maxResultsPerQuery,
   });
   return `tavily:v1:${createHash("sha256").update(stable).digest("hex")}`;
@@ -42,13 +46,15 @@ async function getDatabase(): Promise<import("node:sqlite").DatabaseSync | null>
   if (database !== undefined) return database;
   try {
     const { DatabaseSync } = await import("node:sqlite");
-    const cacheDir = join(process.cwd(), ".cache");
+    const cacheDir = join(process.cwd(), "data", ".cache");
     mkdirSync(cacheDir, { recursive: true });
     database = new DatabaseSync(join(cacheDir, "tavily-search.sqlite"));
     database.exec(`
       CREATE TABLE IF NOT EXISTS tavily_search_cache (
         cache_key TEXT PRIMARY KEY,
         region TEXT NOT NULL,
+        region_scope TEXT NOT NULL DEFAULT '',
+        chateau TEXT NOT NULL DEFAULT '',
         year INTEGER NOT NULL,
         source_type TEXT NOT NULL,
         query TEXT NOT NULL,
@@ -60,6 +66,13 @@ async function getDatabase(): Promise<import("node:sqlite").DatabaseSync | null>
       CREATE INDEX IF NOT EXISTS tavily_search_cache_expires_idx
         ON tavily_search_cache(expires_at);
     `);
+    // Backward-compatible migration for caches created before region_scope/chateau.
+    try {
+      database.exec("ALTER TABLE tavily_search_cache ADD COLUMN region_scope TEXT NOT NULL DEFAULT '';");
+    } catch {}
+    try {
+      database.exec("ALTER TABLE tavily_search_cache ADD COLUMN chateau TEXT NOT NULL DEFAULT '';");
+    } catch {}
     return database;
   } catch {
     database = null;
@@ -107,6 +120,8 @@ export async function writeTavilyCache(
       INSERT OR REPLACE INTO tavily_search_cache (
         cache_key,
         region,
+        region_scope,
+        chateau,
         year,
         source_type,
         query,
@@ -115,10 +130,12 @@ export async function writeTavilyCache(
         created_at,
         expires_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       cacheKey,
       input.region,
+      input.regionScope ?? "",
+      input.chateau ?? "",
       input.year,
       input.sourceType,
       input.query,
