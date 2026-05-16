@@ -3,7 +3,7 @@
 Multi-agent risk + market intelligence for French wine regions (Burgundy & Bordeaux). Built for the Paris AI Hackathon 2026.
 
 **Sponsors:** OpenAI · Tavily · Pioneer.ai
-**Architecture:** Input → OpenAI orchestrator (tool-use loop) → three parallel sub-agents (weather · geo · tavily) → schema-grounded extraction (OpenAI + wine-vintage-quality-schema) → feature agent (Pioneer-hosted wine LLM, with OpenAI as fallback) → dashboard + report + email digest.
+**Architecture:** Input → OpenAI orchestrator (tool-use loop) → three parallel **real** sub-agents (weather: ERA5+SEAS5 climate · geo: 61-château 1855 terroir · tavily: 5-channel Bordeaux harness, SQLite-cached) → schema-grounded extraction (OpenAI + 1150-line wine-vintage-quality-schema, 28 features × 6 hard gates × 11 dynamic adjustments) → feature agent (Pioneer-hosted wine LLM with OpenAI fallback) → dashboard + report + email digest. Orchestrator-level result cache (30 min TTL) makes repeat requests near-instant.
 
 ## Quick start
 
@@ -48,14 +48,16 @@ The system is a pipeline of OpenAI-driven agents wired by a single tool-use loop
 │ 3a. weather │    │ 3b. geo     │    │ 3c. tavily   │
 │ sub-agent   │    │ sub-agent   │    │ sub-agent    │
 │             │    │             │    │              │
-│ src/lib/    │    │ src/lib/    │    │ src/lib/     │
-│ agents/sub- │    │ agents/sub- │    │ agents/sub-  │
-│ agents/     │    │ agents/     │    │ agents/      │
-│ weather.ts  │    │ geo.ts      │    │ tavily.ts    │
-│             │    │             │    │              │
-│ stub →      │    │ stub →      │    │ stub →       │
-│ open-meteo /│    │ INAO geo /  │    │ Tavily       │
-│ Météo-France│    │ centroids   │    │ search API   │
+│ ERA5 1990-  │    │ 61 × 1855   │    │ Bordeaux     │
+│ 2024 DEM-   │    │ classed     │    │ harness:     │
+│ downscaled  │    │ growths:    │    │ 5 source     │
+│ historicals │    │ elev / TPI /│    │ types        │
+│   +         │    │ Gironde dist│    │ (sentiment / │
+│ SEAS5 2026  │    │ / soil clay-│    │ policy / reg │
+│ ensemble    │    │ sand / aoc  │    │ / winemaker  │
+│ forecast    │    │ mix         │    │ / market)    │
+│             │    │             │    │ + SQLite 7-d │
+│             │    │             │    │ cache layer  │
 └─────┬───────┘    └─────┬───────┘    └─────┬────────┘
       │                  │                  │
       │ WeatherSignals   │ GeoSignals       │ TavilySignals
@@ -67,8 +69,9 @@ The system is a pipeline of OpenAI-driven agents wired by a single tool-use loop
 │ 4. EXTRACTION — src/lib/agents/extraction.ts                                    │
 │    Driven by OpenAI Chat Completions · response_format: json_schema (strict)    │
 │                                                                                 │
-│    System prompt = data/wine-vintage-quality-schema.json (499-line authoritative│
-│    scoring model: 19 weighted features + 6 hard gates + 4 dynamic adjustments). │
+│    System prompt = data/wine-vintage-quality-schema.json (1150-line scoring   │
+│    model: 28 features × 6 hard event gates × 11 dynamic adjustments, plus      │
+│    tavilyAgentFeatureContract for external/market signals integration).        │
 │                                                                                 │
 │    Input (from GPT tool-call):                                                  │
 │      • regionId · persona                                                       │
@@ -166,27 +169,35 @@ The system is a pipeline of OpenAI-driven agents wired by a single tool-use loop
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### LLM call sites
+### LLM + data call sites
 
-| Agent | Model | Output format | Schema grounding |
+| Agent | Backend | Output format | Source / grounding |
 |---|---|---|---|
-| **Orchestrator** | `OPENAI_MODEL` (gpt-4o-mini default) | tool_calls | tool descriptors built from each SubAgent's `input_schema` |
-| **Extraction** | `OPENAI_MODEL` | `response_format: json_schema` (strict) | `data/wine-vintage-quality-schema.json` in system prompt |
-| **Feature — tier 1** | `PIONEER_MODEL_ID` (Pioneer-hosted wine LLM — Qwen / GLM / Llama class today; fine-tuned local later) | `response_format: json_object` + prompt-enforced shape | own JSON contract in system prompt |
-| **Feature — tier 2** | `OPENAI_MODEL` | `response_format: json_schema` (strict) | own response schema (fallback) |
+| **Orchestrator** | OpenAI Chat Completions (`OPENAI_MODEL`, gpt-4o-mini default) | `tool_calls` | tool descriptors built from each SubAgent's `input_schema` |
+| **weather_agent** | bundled CSV reads (no API) | structured `WeatherSignals` | `data/climate_features_downscaled.csv` (1990-2024 ERA5 DEM-downscaled) + `data/climate_features_forecast_2026.csv` (ECMWF SEAS5 ensemble) |
+| **geo_agent** | bundled CSV reads (no API) | structured `GeoSignals` | `data/{chateaux,static_geo,microtopo}.csv` joined on château name |
+| **tavily_agent** | Tavily Search API (real) | structured `TavilySignals` | 5-channel Bordeaux harness (sentiment / policy / regulation / winemaker / market) with trusted-domain weights; **SQLite 7-day cache** (`tavily-cache.ts`, `node:sqlite`) so repeat queries are free |
+| **Extraction** | OpenAI Chat Completions (`OPENAI_MODEL`) | `response_format: json_schema` (strict) | `data/wine-vintage-quality-schema.json` (1150 lines) in system prompt |
+| **Feature — tier 1** | Pioneer.ai chat completions (`PIONEER_MODEL_ID`) | `response_format: json_object` + prompt-enforced shape | own JSON contract in system prompt |
+| **Feature — tier 2** | OpenAI Chat Completions (`OPENAI_MODEL`) | `response_format: json_schema` (strict) | own response schema (fallback) |
+| **Orchestrator result cache** | in-memory `Map` | `AnalyzeResult` | keyed on (region · persona · timeframe · question · château · uploads-meta); 30 min TTL, LRU 64 entries |
 
 ### Degradation ladder
 
 Every agent falls back gracefully so the dashboard stays demoable:
 
 ```
+cache hit on prior identical request ───────► return cached AnalyzeResult instantly
 demo mode (NEXT_PUBLIC_DEMO_MODE=true) ────► fixture pipeline (src/lib/demo/fixtures.ts)
 missing OPENAI_API_KEY ─────────────────────► fixture pipeline, flagged isDemoOrPartial
-extraction OpenAI call fails ───────────────► extraction heuristic stub
+weather/geo data not in CSV ────────────────► graceful "no coverage" reply, ok:true
+tavily TAVILY_API_KEY missing ──────────────► [stub] empty signals
+tavily query already in SQLite cache ───────► instant return (no API call)
+extraction OpenAI call fails ───────────────► extraction heuristic stub (ok:true, error logged)
 schema file missing ────────────────────────► extraction heuristic stub
 feature Pioneer call fails / returns null ──► feature tier-2 OpenAI structured output
 feature OpenAI tier-2 also fails ───────────► feature tier-3 template (from extraction output)
-sub-agent (weather/geo/tavily) errors ──────► trace records ok:false, downstream continues
+sub-agent errors ───────────────────────────► trace records error, harvest still picks up data
 ```
 
 ## Project layout
@@ -266,13 +277,14 @@ Read [`docs/AGENTS.zh.md`](docs/AGENTS.zh.md) first — it lays out who owns whi
 
 ## UI
 
-- **Two entry routes**: `/vineyard` (with file upload) and `/trade` (with Bordeaux map + 4-chart dashboard)
-- **Trilingual**: FR / EN / 中 toggle in top nav (in-memory, no URL change)
-- **Charts**: Recharts (drivers consulting-style donut · weather composed line/area/bar · regional risk · market sentiment)
-- **Map**: react-simple-maps with inline France GeoJSON, six Bordeaux markers colored by risk
-- **Workflow visualisation**: n8n-style SVG pipeline in the sidebar — live state per agent during analysis
-- **Export**: `window.print()` for PDF + direct `.md` report download (when feature_agent ran)
-- **Subscribe**: email form → `/api/subscribe`, with feature_agent's email digest shown inline as a preview
+- **Two entry routes**: `/vineyard` (with file upload) and `/trade`. Both now mount the **interactive Leaflet Bordeaux map** in the sidebar.
+- **Bilingual**: EN (default) / FR toggle in top nav, in-memory.
+- **Charts**: Recharts — consulting-style drivers donut · weather composed line/area/bar · regional risk · market sentiment.
+- **Map**: react-leaflet over CARTO online tiles. 61 1855-classed château markers coloured by `growth_num`, click-to-focus. **Search input** filters by château / AOC / commune / cru (live count + auto fly-to single match). **Fullscreen toggle** for picking on a viewport-sized canvas.
+- **Workflow visualisation**: n8n-style SVG pipeline in the sidebar — live state per agent during analysis. Step details rendered two-line so long summaries + 5-digit durations don't collide.
+- **Terroir card**: structured geo_agent output (elevation, soil, Gironde distance, frost-pocket signals, AOC mix) rendered above the driver donut on both dashboards.
+- **Export**: `window.print()` for PDF + direct `.md` report download (when feature_agent ran).
+- **Subscribe**: email form → `/api/subscribe`, with feature_agent's email digest shown inline as a preview.
 
 ## Conventions
 
