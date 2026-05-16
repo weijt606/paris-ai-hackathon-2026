@@ -15,9 +15,20 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * Drives the analyze flow with a workflow-style visual progression.
  *
  * The API call runs in parallel with phased state transitions so the user
- * sees the agents "wake up" in the right topology order even when the
- * backend (demo mode) responds instantly. Real-mode latency is hidden
- * inside phase 2 which awaits both the timer and the response promise.
+ * sees the agents "wake up" in topology order even when the backend (demo
+ * mode) responds instantly. Real-mode latency is absorbed inside phase 3
+ * which awaits both the timer and the response promise.
+ *
+ * Phases — keep in sync with the WorkflowTrace topology:
+ *   0.  input        — set to "ok" immediately on click
+ *   1.  orchestrator — runs, then ok
+ *   2.  fan-out      — weather + geo + tavily run in parallel
+ *   3.  api join     — wait for response, map traces to ok/fail
+ *   4.  extraction   — runs (pioneer fires concurrently as a tool call)
+ *   5.  pioneer ok   — short-lived: pioneer responds before extraction concludes
+ *   6.  extraction ok
+ *   7.  feature      — runs, then ok
+ *   8.  dashboard ok — reveal the result panel
  */
 export function useAnalysisFlow() {
   const [workflowState, setWorkflowState] = useState<WorkflowState>(INITIAL_WORKFLOW);
@@ -31,10 +42,8 @@ export function useAnalysisFlow() {
     setError(null);
     setResult(null);
     setDetails({});
-    setWorkflowState(INITIAL_WORKFLOW);
+    setWorkflowState({ ...INITIAL_WORKFLOW, input: "ok" });
 
-    // Kick off API request immediately — it runs in parallel with the
-    // visual animation phases below.
     const apiPromise = (async (): Promise<AnalyzeResult> => {
       const res = await fetch("/api/analyze", {
         method: "POST",
@@ -49,11 +58,11 @@ export function useAnalysisFlow() {
     })();
 
     try {
-      // Phase 1 — orchestrator wakes up.
-      await sleep(180);
+      // Phase 1 — orchestrator wakes up
+      await sleep(160);
       setWorkflowState((s) => ({ ...s, orchestrator: "running" }));
 
-      await sleep(380);
+      await sleep(360);
       setWorkflowState((s) => ({
         ...s,
         orchestrator: "ok",
@@ -62,18 +71,18 @@ export function useAnalysisFlow() {
         tavily_agent: "running",
       }));
 
-      // Phase 2 — three sub-agents in parallel. Wait for both the timer
-      // and the real API response before resolving their statuses.
+      // Phase 2 — three sub-agents parallel; wait for both animation + API
       await sleep(900);
       const data = await apiPromise;
 
       const traceMap = Object.fromEntries(data.trace.map((t) => [t.agent, t]));
-      const setSub = (key: NodeKey): WorkflowState[NodeKey] =>
-        traceMap[key]?.ok ? "ok" : "fail";
-      const detail = (key: NodeKey): NodeDetail | undefined => {
+      const setSub = (key: NodeKey): WorkflowState[NodeKey] => {
+        const tr = traceMap[key];
+        return tr ? (tr.ok ? "ok" : "fail") : "ok";
+      };
+      const detailOf = (key: NodeKey): NodeDetail | undefined => {
         const t = traceMap[key];
-        if (!t) return undefined;
-        return { durationMs: t.durationMs, summary: t.summary, error: t.error };
+        return t ? { durationMs: t.durationMs, summary: t.summary, error: t.error } : undefined;
       };
 
       setWorkflowState((s) => ({
@@ -84,25 +93,42 @@ export function useAnalysisFlow() {
       }));
       setDetails((d) => ({
         ...d,
-        weather_agent: detail("weather_agent"),
-        geo_agent: detail("geo_agent"),
-        tavily_agent: detail("tavily_agent"),
+        weather_agent: detailOf("weather_agent"),
+        geo_agent: detailOf("geo_agent"),
+        tavily_agent: detailOf("tavily_agent"),
       }));
 
-      // Phase 3 — extraction.
-      await sleep(280);
-      setWorkflowState((s) => ({ ...s, extraction_agent: "running" }));
+      // Phase 3 — extraction + Pioneer (tool call) run concurrently
+      await sleep(240);
+      setWorkflowState((s) => ({
+        ...s,
+        extraction_agent: "running",
+        pioneer: "running",
+      }));
 
-      await sleep(520);
-      setWorkflowState((s) => ({ ...s, extraction_agent: setSub("extraction_agent") }));
-      setDetails((d) => ({ ...d, extraction_agent: detail("extraction_agent") }));
+      // Pioneer responds first (classifier is fast)
+      await sleep(380);
+      setWorkflowState((s) => ({ ...s, pioneer: "ok" }));
 
-      // Phase 4 — reveal result.
+      // Extraction concludes using pioneer's output + sub-agent signals
       await sleep(180);
+      setWorkflowState((s) => ({ ...s, extraction_agent: setSub("extraction_agent") }));
+      setDetails((d) => ({ ...d, extraction_agent: detailOf("extraction_agent") }));
+
+      // Phase 4 — feature agent
+      await sleep(220);
+      setWorkflowState((s) => ({ ...s, feature_agent: "running" }));
+
+      await sleep(360);
+      setWorkflowState((s) => ({ ...s, feature_agent: setSub("feature_agent") }));
+      setDetails((d) => ({ ...d, feature_agent: detailOf("feature_agent") }));
+
+      // Phase 5 — dashboard / reveal
+      await sleep(160);
+      setWorkflowState((s) => ({ ...s, dashboard: "ok" }));
       setResult(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Analysis failed");
-      // mark any still-running agents as failed
       setWorkflowState((s) => {
         const next = { ...s };
         for (const k of Object.keys(s) as NodeKey[]) {
