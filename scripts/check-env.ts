@@ -44,8 +44,23 @@ const checks: Check[] = [
       if (!process.env.PIONEER_API_KEY)
         return { ok: false, detail: "PIONEER_API_KEY not set" };
       if (!process.env.PIONEER_MODEL_ID)
-        return { ok: false, detail: "PIONEER_MODEL_ID not set (train model first)" };
-      return { ok: true, detail: `key + model_id present (${process.env.PIONEER_MODEL_ID})` };
+        return { ok: false, detail: "PIONEER_MODEL_ID not set (pick model in Pioneer dashboard)" };
+      const base = process.env.PIONEER_BASE_URL ?? "https://api.pioneer.ai";
+      const res = await fetch(`${base}/v1/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.PIONEER_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: process.env.PIONEER_MODEL_ID,
+          messages: [{ role: "user", content: "ping" }],
+          stream: false,
+        }),
+      });
+      return res.ok
+        ? { ok: true, detail: `${res.status} OK (${process.env.PIONEER_MODEL_ID})` }
+        : { ok: false, detail: `${res.status} ${(await res.text()).slice(0, 200)}` };
     },
   },
 ];

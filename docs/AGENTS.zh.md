@@ -298,38 +298,63 @@ Owner 待定。当前是 passthrough stub。两个候选方向：
 
 ## 7. Pioneer.ai 集成
 
-Pioneer.ai 是 **GLiNER2 实体分类推理服务**。Workflow：
+Pioneer.ai 是 **OpenAI-compatible LLM hosting**（POST `/v1/chat/completions`，Bearer 鉴权）。
+文档：https://docs.pioneer.ai/
+
+**两阶段路线，代码完全不变（只换 PIONEER_MODEL_ID）：**
 
 ```
-[离线] data team 在 Pioneer 平台用葡萄酒行业数据训练分类器 → 得到 model_id
-        │
-[在线]  我们调 POST https://api.pioneer.ai/inference
-        ├─ 鉴权: X-API-Key
-        ├─ Body: { model_id, text, schema: { classifications: [{ task, labels }] } }
-        └─ 返回: { result: { <task>: <label> } }
+阶段 1（现在）       阶段 2（dev/data 团队训完）
+─────────────────  ───────────────────────────────
+Pioneer hosted     Pioneer fine-tuned local
+gpt-5.5 (uuid)     wine-domain model (uuid)
+       │                       │
+       └─────── pioneerChat() ─┘     ◄── 同一个 fetch 调用
+                  │
+                  ▼
+       extraction_agent / feature_agent
 ```
 
-Adapter `src/lib/training/pioneer.ts` 已实现，对外只暴露 **一个函数**：
+**为什么不直接用 OpenAI**：
+- Sponsor 要求接入 Pioneer
+- 现在 hosted gpt-5.5 没有微调能力 → 但本地模型可微调，dev 用葡萄酒行业语料训练后 swap model_id 就能切换
+- 架构上**用 Pioneer 做 wine-domain heavy reasoning**（extraction / feature），orchestrator 仍用 OpenAI（gpt-4o-mini 调度成本低）
+
+Adapter `src/lib/training/pioneer.ts` 对外只暴露 **一个函数**：
 
 ```ts
-classify({
-  text: string,           // 待分类文本（短、结构化最佳）
-  task: string,           // 分类任务名，如 "risk_band"
-  labels: readonly string[],  // 闭集标签（必须和训练时一致）
-  modelId?: string,       // 覆盖默认 PIONEER_MODEL_ID
-  timeoutMs?: number,     // 默认 8000ms
-}): Promise<{ label: string | null; modelId: string; latencyMs: number } | null>
+pioneerChat(messages: PioneerChatMessage[], opts?: {
+  modelId?: string;       // 覆盖 env PIONEER_MODEL_ID（用于 A/B）
+  timeoutMs?: number;     // 默认 15000
+  responseFormat?: object; // OpenAI 兼容的 response_format（json_object / json_schema）
+  temperature?: number;
+}): Promise<{ content: string; modelId: string; latencyMs: number } | null>
 ```
 
 **约定**：
-- 任何失败（缺 key、缺 model_id、超时、网络错误、不在 labels 内）都返回 `null` 或 `{label: null}`。**不抛错** —— caller 可以无脑 fallback 到启发式。
-- 调用方负责把 label 映射到业务语义（band → score、tag → driver kind 等）。
+- 任何失败（缺 key/model_id、超时、网络错误、空响应）都返回 `null`。**不抛错** —— caller 无脑 fallback。
+- 内部用 `AbortController` + 15 秒上限；`signal: ctrl.signal` 已传入 fetch。
 
-**典型 caller**：`extraction_agent`（risk_band 分类）、`feature_agent`（driver 分类）。
+**典型 caller**：
+
+```ts
+// extraction_agent (推荐主用 Pioneer)
+import { pioneerChat } from "@/lib/training/pioneer";
+
+const res = await pioneerChat(
+  [
+    { role: "system", content: "You are a wine risk analyst. Return JSON {score, drivers, recommendations}." },
+    { role: "user", content: buildExtractionPrompt(input) },
+  ],
+  { responseFormat: { type: "json_object" }, temperature: 0.2 },
+);
+if (res) return parseRiskJSON(res.content);
+// 否则降级到 OpenAI structured / heuristic
+```
 
 **Env 配置**：
-- `PIONEER_API_KEY` — Pioneer 控制台拿
-- `PIONEER_MODEL_ID` — 训完模型后 Pioneer 给的 id
+- `PIONEER_API_KEY` — Pioneer dashboard 拿，形如 `pio_sk_xxxxx`。**只放 `.env.local`，绝不入 git**
+- `PIONEER_MODEL_ID` — Pioneer dashboard 里选好 model 后拿到的 UUID
 - `PIONEER_BASE_URL` — 默认 `https://api.pioneer.ai`，一般无需改
 
 ---

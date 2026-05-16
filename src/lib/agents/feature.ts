@@ -24,13 +24,15 @@ export interface FeatureOutput {
  *
  * Example consumer (drop into run() once features are scoped):
  *
- *     import { classify } from "@/lib/training/pioneer";
- *     const cls = await classify({
- *       text: `score=${input.riskScore}; drivers=${JSON.stringify(input.knobs)}`,
- *       task: "risk_band",
- *       labels: ["low", "moderate", "elevated", "high"],
- *     });
- *     // cls?.label gives the wine-domain-trained classifier's band
+ *     import { pioneerChat } from "@/lib/training/pioneer";
+ *     const res = await pioneerChat(
+ *       [
+ *         { role: "system", content: "Return JSON: { features: {...} }" },
+ *         { role: "user", content: `Risk=${input.riskScore}; knobs=${JSON.stringify(input.knobs)}` },
+ *       ],
+ *       { responseFormat: { type: "json_object" } },
+ *     );
+ *     // res?.content is the wine-domain LLM's structured feature payload
  *
  * The orchestrator wires this agent as an optional tool so it can be
  * implemented and enabled without changing the loop.
