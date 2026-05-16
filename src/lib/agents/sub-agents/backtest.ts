@@ -1,5 +1,5 @@
 import "server-only";
-import { env, integrations, isDemoMode, sponsors } from "@/lib/env";
+import { integrations, isDemoMode, openaiModelForAgents, sponsors } from "@/lib/env";
 import { openaiClient } from "@/lib/ai/openai";
 import { runTavilyHarness } from "@/lib/agents/sub-agents/tavily";
 import type { SubAgent } from "@/lib/agents/types";
@@ -201,7 +201,7 @@ export const backtestAgent: SubAgent<BacktestInput, BacktestOutput> = {
 
       const res = await client.chat.completions.create(
         {
-          model: env.OPENAI_MODEL,
+          model: openaiModelForAgents(),
           messages: [
             { role: "system", content: SYSTEM_PROMPT },
             { role: "user", content: userMessage },

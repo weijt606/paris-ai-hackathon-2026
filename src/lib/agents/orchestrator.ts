@@ -1,6 +1,6 @@
 import "server-only";
 import type OpenAI from "openai";
-import { env, isDemoMode, sponsors } from "@/lib/env";
+import { isDemoFast, isDemoMode, openaiModelForAgents, sponsors } from "@/lib/env";
 import { openaiClient } from "@/lib/ai/openai";
 import { demoWineAnalysis } from "@/lib/demo/fixtures";
 import {
@@ -175,6 +175,21 @@ export async function analyze(
   };
 
   const trace: AgentResult[] = [];
+
+  // ─── Demo-fast: fixed-order direct dispatch ────────────────────────
+  // Skip the GPT tool-use loop entirely. We know the canonical flow
+  // (weather + geo + tavily in parallel → extraction → feature → optional
+  // backtest), so for a tight live demo the routing LLM is pure overhead
+  // (5-7 GPT roundtrips, ~30-50 s on gpt-4o-mini). Direct dispatch keeps
+  // the pipeline well under the 30 s budget at the cost of losing the
+  // LLM's ability to reorder or skip sub-agents based on the user
+  // question. That trade-off is acceptable for the live demo only.
+  if (isDemoFast) {
+    const result = await directDispatch(input, ctx, trace);
+    if (!result.isDemoOrPartial) cachePut(key, result);
+    return result;
+  }
+
   const client = openaiClient();
 
   const bootstrap = [
@@ -205,7 +220,7 @@ export async function analyze(
 
     const res = await client.chat.completions.create(
       {
-        model: env.OPENAI_MODEL,
+        model: openaiModelForAgents(),
         messages,
         tools: toolDescriptors(),
         tool_choice: "auto",
@@ -267,6 +282,134 @@ export async function analyze(
   // keys) shouldn't poison the cache for future requests.
   if (!result.isDemoOrPartial) cachePut(key, result);
   return result;
+}
+
+/**
+ * Direct dispatch — used in demo-fast mode. Calls the agents in the
+ * canonical wine-intelligence order without any GPT routing in between.
+ * Each agent's `summary` field is what extraction normally gets after the
+ * LLM "synthesises" the upstream calls; the raw `data` is too big and not
+ * what extraction's prompt is shaped for.
+ */
+async function directDispatch(
+  input: AnalyzeInput,
+  ctx: AgentContext,
+  trace: AgentResult[],
+): Promise<AnalyzeResult> {
+  const weatherInput = {
+    regionId: input.region.id,
+    start: input.timeframe.start,
+    end: input.timeframe.end,
+    chateau: input.chateau,
+  };
+  const geoInput = {
+    regionId: input.region.id,
+    chateau: input.chateau,
+  };
+  const vintageYear =
+    Number.parseInt(input.timeframe.end.slice(0, 4), 10) ||
+    new Date().getFullYear();
+  const tavilyInput = {
+    region: "Bordeaux",
+    regionId: input.region.id,
+    startYear: vintageYear,
+    endYear: vintageYear,
+    chateau: input.chateau,
+    query: input.question,
+  };
+
+  // Phase 1 — weather + geo (parallel, both bundled-data only, <50 ms).
+  const [weather, geo] = await Promise.all([
+    runAgentSafely(weatherAgent as AnyAgent, weatherInput, ctx),
+    runAgentSafely(geoAgent as AnyAgent, geoInput, ctx),
+  ]);
+
+  const summary = (r: AgentResult): string => {
+    if (r.summary) return r.summary;
+    if (r.data) {
+      try {
+        return JSON.stringify(r.data).slice(0, 800);
+      } catch {
+        return r.error ?? "no data";
+      }
+    }
+    return r.error ?? "no data";
+  };
+
+  // Phase 2 — tavily + extraction in parallel. Extraction would normally
+  // wait on tavily's signal, but tavily's main consumer is backtest +
+  // the trace (UI evidence list). For demo-fast we let extraction run on
+  // weather+geo signals alone so its 18 s LLM call overlaps with
+  // tavily's 5-10 s network round-trip — total wallclock = max() of the
+  // two, not sum.
+  const [tavily, extraction] = await Promise.all([
+    runAgentSafely(tavilyAgent as AnyAgent, tavilyInput, ctx),
+    runAgentSafely(
+      extractionAgent as AnyAgent,
+      {
+        regionId: input.region.id,
+        persona: input.persona,
+        weatherSignal: summary(weather),
+        geoSignal: summary(geo),
+      },
+      ctx,
+    ),
+  ]);
+  trace.push(weather, geo, tavily, extraction);
+
+  // Phase 3 — feature_agent reads from extraction's score / band / drivers.
+  const ext = extraction.data as Partial<ExtractionOutput> | undefined;
+  const driversSummary =
+    ext?.drivers && ext.drivers.length > 0
+      ? ext.drivers
+          .slice(0, 3)
+          .map((d) => `${d.source}: ${d.signal}`)
+          .join("; ")
+      : undefined;
+  const recommendationsSummary =
+    ext?.recommendations && ext.recommendations.length > 0
+      ? ext.recommendations[0]!.action
+      : undefined;
+
+  // Phase 3 — feature + backtest in parallel. Both consume extraction's
+  // output but not each other's, so on the backtest path we can overlap
+  // their two ~10 s LLM calls (saves the backtest path ~8 s wallclock).
+  const featurePromise = runAgentSafely(
+    featureAgent as AnyAgent,
+    {
+      regionId: input.region.id,
+      persona: input.persona,
+      score: ext?.score ?? 0,
+      qualityBand: ext?.qualityBand,
+      driversSummary,
+      recommendationsSummary,
+      rationale: ext?.rationale,
+    },
+    ctx,
+  );
+
+  const backtestPromise =
+    ctx.isBacktest && ctx.vintageYear
+      ? runAgentSafely(
+          backtestAgent as AnyAgent,
+          {
+            regionId: input.region.id,
+            regionName: input.region.name,
+            year: ctx.vintageYear,
+            persona: input.persona,
+            predictedScore: ext?.score ?? 0,
+            predictedBand: ext?.qualityBand,
+            driversSummary,
+          },
+          ctx,
+        )
+      : null;
+
+  const [feature, backtest] = await Promise.all([featurePromise, backtestPromise]);
+  trace.push(feature);
+  if (backtest) trace.push(backtest);
+
+  return harvest(input, trace);
 }
 
 function harvest(input: AnalyzeInput, trace: AgentResult[]): AnalyzeResult {

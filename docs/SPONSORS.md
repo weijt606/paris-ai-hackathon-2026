@@ -224,6 +224,7 @@ demo.** Here is what happens when each goes down:
 | `PIONEER_API_KEY` missing | feature_agent skips tier 1, goes straight to OpenAI tier 2 | invisible — feature still ships |
 | Pioneer down / timeout | feature_agent tier 1 returns null in ≤15 s, then tier 2 takes over | invisible at the product layer; visible in `trace[].notes` |
 | `NEXT_PUBLIC_DEMO_MODE=true` | entire pipeline short-circuits to `demoWineAnalysis()` | the dashboard's data-source pill shows "DEMO" |
+| `NEXT_PUBLIC_DEMO_FAST=true` | live LLM/Tavily still hit, but on a tight budget: Tavily cache pre-hydrated from `data/tavily-cache-export.json`, feature_agent skips Pioneer and goes straight to OpenAI tier 2, Tavily `max_results_per_query` capped at 3 | invisible at the product layer; visible in `trace[]` durations (typically <30 s total) |
 
 This is the H2/H3 contract in `CLAUDE.md` made concrete — every adapter is
 gated, every failure is observable in `trace[]`, demo mode is the rehearsal

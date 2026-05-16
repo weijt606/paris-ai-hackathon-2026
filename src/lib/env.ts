@@ -18,6 +18,19 @@ const publicSchema = z.object({
     .union([z.literal("true"), z.literal("false"), z.literal("")])
     .default("false")
     .transform((v) => v === "true"),
+  /**
+   * Demo-fast mode — applies tight budgets aimed at keeping a full
+   * /api/analyze call under 30 s for live demos. When true:
+   *   - Tavily cache is pre-hydrated from data/tavily-cache-export.json
+   *   - feature_agent skips Pioneer (tier 1) and goes straight to OpenAI
+   *   - Tavily max_results_per_query is capped at 3
+   * Unlike NEXT_PUBLIC_DEMO_MODE, this still hits the real LLM and Tavily
+   * APIs — the pipeline just runs with smaller payloads on tighter timeouts.
+   */
+  NEXT_PUBLIC_DEMO_FAST: z
+    .union([z.literal("true"), z.literal("false"), z.literal("")])
+    .default("false")
+    .transform((v) => v === "true"),
   NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
 });
 
@@ -36,6 +49,7 @@ function parseEnv() {
   const pub = publicSchema.safeParse({
     NEXT_PUBLIC_APP_NAME: process.env.NEXT_PUBLIC_APP_NAME,
     NEXT_PUBLIC_DEMO_MODE: process.env.NEXT_PUBLIC_DEMO_MODE,
+    NEXT_PUBLIC_DEMO_FAST: process.env.NEXT_PUBLIC_DEMO_FAST,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   });
   if (!pub.success) {
@@ -57,5 +71,21 @@ export const sponsors = {
 export const integrations = sponsors;
 
 export const isDemoMode = env.NEXT_PUBLIC_DEMO_MODE;
+export const isDemoFast = env.NEXT_PUBLIC_DEMO_FAST;
+
+/**
+ * Returns the OpenAI model the wine-intelligence agents should use right now.
+ *
+ * In demo-fast mode we override whatever the operator put in OPENAI_MODEL with
+ * gpt-4o-mini. The vintage-quality schema task is structured-JSON emission
+ * against a fixed schema, which a reasoning model (gpt-5*, o-series) is
+ * actively bad at — it spends 20-40 s on hidden chain-of-thought that adds
+ * nothing the schema doesn't already constrain, and it rejects custom
+ * temperature too. For a live ≤30 s demo we cannot afford that latency.
+ */
+export function openaiModelForAgents(): string {
+  if (isDemoFast) return "gpt-4o-mini";
+  return env.OPENAI_MODEL;
+}
 
 export type SponsorKey = keyof typeof sponsors;

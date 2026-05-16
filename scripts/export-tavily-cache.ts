@@ -88,7 +88,7 @@ async function main() {
     process.exit(1);
   }
 
-  const db = new DatabaseSync(dbPath, { readonly: true });
+  const db = new DatabaseSync(dbPath, { readOnly: true });
   const rows = db.prepare("SELECT * FROM tavily_search_cache ORDER BY created_at DESC").all() as CacheExportRow[];
   const now = Date.now();
 

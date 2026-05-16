@@ -1,7 +1,7 @@
 import "server-only";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { env, isDemoMode, sponsors } from "@/lib/env";
+import { isDemoMode, openaiModelForAgents, sponsors } from "@/lib/env";
 import { openaiClient } from "@/lib/ai/openai";
 import type { SubAgent } from "@/lib/agents/types";
 import type { Persona, Recommendation, RiskDriver } from "@/lib/wine/types";
@@ -252,7 +252,7 @@ export const extractionAgent: SubAgent<ExtractionInput, ExtractionOutput> = {
 
       const res = await client.chat.completions.create(
         {
-          model: env.OPENAI_MODEL,
+          model: openaiModelForAgents(),
           messages: [
             { role: "system", content: SYSTEM_PROMPT_HEAD + schemaText },
             { role: "user", content: userMessage },
