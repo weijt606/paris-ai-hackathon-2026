@@ -19,6 +19,7 @@ import type {
   AnalyzeResult,
   AgentStepTrace,
   FeatureSummary,
+  GeoSnapshot,
   Recommendation,
   RiskDriver,
 } from "@/lib/wine/types";
@@ -189,9 +190,11 @@ export async function analyze(
 function harvest(input: AnalyzeInput, trace: AgentResult[]): AnalyzeResult {
   const extraction = [...trace].reverse().find((r) => r.agent === "extraction_agent" && r.ok);
   const feature = [...trace].reverse().find((r) => r.agent === "feature_agent" && r.ok);
+  const geo = [...trace].reverse().find((r) => r.agent === "geo_agent" && r.ok);
 
   const extractionData = extraction?.data as Partial<ExtractionOutput> | undefined;
   const featureData = feature?.data as FeatureSummary | undefined;
+  const geoData = geo?.data as GeoSnapshot | undefined;
 
   const score = extractionData?.score ?? 0;
   const sawFailure = trace.some((r) => !r.ok);
@@ -208,6 +211,7 @@ function harvest(input: AnalyzeInput, trace: AgentResult[]): AnalyzeResult {
     activeGates: extractionData?.activeGates,
     rationale: extractionData?.rationale,
     feature: featureData ?? null,
+    geoSnapshot: geoData ?? null,
     trace: trace.map<AgentStepTrace>((r) => ({
       agent: r.agent,
       ok: r.ok,
