@@ -221,8 +221,82 @@ export function demoWineAnalysis(input: AnalyzeInput): AnalyzeResult {
       "Demo-mode placeholder: weighted base from sub-agent stubs, gated by spring-frost signal and softening market sentiment.",
     feature: demoFeature(input, score),
     geoSnapshot: demoGeoSignals(input.region.id),
+    backtest: demoBacktestIfHistorical(input, score),
     generatedAt: new Date().toISOString(),
     isDemoOrPartial: true,
+  };
+}
+
+function demoBacktestIfHistorical(input: AnalyzeInput, score: number) {
+  const today = new Date().toISOString().slice(0, 10);
+  if (input.timeframe.end >= today) return null;
+  const year = Number.parseInt(input.timeframe.end.slice(0, 4), 10);
+  if (!Number.isFinite(year)) return null;
+  const predictedBand: "Great" | "Excellent" | "Good" | "Average" | "Poor" =
+    score >= 80 ? "Poor" : score >= 60 ? "Average" : score >= 45 ? "Good" : score >= 25 ? "Excellent" : "Great";
+  // Reuse the same well-known vintage fixtures as backtest.ts.
+  const ref: Record<
+    number,
+    {
+      verdict: "high_agreement" | "moderate_agreement" | "divergent";
+      summary: string;
+      critics: Array<{ source: string; score?: number; scale?: string; quote: string; url?: string }>;
+    }
+  > = {
+    2010: {
+      verdict: "high_agreement",
+      summary:
+        "2010 was a landmark warm-dry vintage; critic consensus aligned with a Great/Excellent prediction.",
+      critics: [
+        { source: "Wine Advocate", score: 98, scale: "/100", quote: "A modern reference vintage; long-aging structure with ripe tannins." },
+        { source: "Liv-ex", scale: "+18% YoY", quote: "First-growth release prices rose sharply post-en primeur." },
+        { source: "Decanter", score: 5, scale: "/5", quote: "Exceptional; among the great Bordeaux vintages of the century." },
+      ],
+    },
+    2013: {
+      verdict: "divergent",
+      summary:
+        "2013 was a poor vintage; if our model predicted Good or better, we missed the cool-wet signal.",
+      critics: [
+        { source: "Wine Advocate", score: 84, scale: "/100", quote: "Difficult vintage with cool wet summer; quality below average." },
+        { source: "Decanter", score: 2, scale: "/5", quote: "Disappointing across most appellations." },
+        { source: "Liv-ex", scale: "-9% YoY", quote: "Negotiants struggled to clear en primeur stock." },
+      ],
+    },
+    2015: {
+      verdict: "high_agreement",
+      summary: "2015 was a strong warm vintage. High band predictions aligned with the critical consensus.",
+      critics: [
+        { source: "Wine Advocate", score: 96, scale: "/100", quote: "Generous, ripe, charismatic — the best left-bank since 2010." },
+        { source: "Vinous", score: 95, scale: "/100", quote: "Outstanding across the Médoc; balanced with energy." },
+        { source: "Liv-ex", scale: "+12% YoY", quote: "Market embraced the vintage; allocations tight." },
+      ],
+    },
+    2020: {
+      verdict: "moderate_agreement",
+      summary: "2020 split critics on stylistic merits; partial agreement expected.",
+      critics: [
+        { source: "Wine Advocate", score: 95, scale: "/100", quote: "Hot vintage but balanced; concentrated, hedonistic." },
+        { source: "Decanter", score: 4, scale: "/5", quote: "Strong vintage despite drought stress on some sites." },
+        { source: "Liv-ex", scale: "+6% YoY", quote: "Solid release but slower trade pace than 2018." },
+      ],
+    },
+  };
+  const found = ref[year] ?? {
+    verdict: "moderate_agreement" as const,
+    summary: `Demo backtest for ${input.region.name} ${year} — connect Tavily + OpenAI for real critic retrieval.`,
+    critics: [
+      { source: "fixture", quote: `Demo fixture for ${input.region.name} ${year}.` },
+    ],
+  };
+  return {
+    isBacktest: true as const,
+    year,
+    predictedScore: score,
+    predictedBand,
+    critics: found.critics,
+    accuracySummary: found.summary,
+    verdict: found.verdict,
   };
 }
 

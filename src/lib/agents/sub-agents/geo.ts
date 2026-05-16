@@ -55,15 +55,18 @@ export const geoAgent: SubAgent<GeoInput, GeoSignals> = {
     },
     required: ["regionId"],
   },
-  async run(input) {
+  async run(input, ctx) {
     const t0 = Date.now();
+    // User intent (trade dashboard map click) wins over GPT routing — if
+    // ctx.chateau was set by the orchestrator, force single-site mode.
+    const chateau = ctx.chateau ?? input.chateau;
     if (isDemoMode) {
       return {
         agent: "geo_agent",
         ok: true,
         durationMs: 0,
-        data: demoGeoSignals(input.regionId, input.chateau),
-        summary: "demo · terroir fixture",
+        data: demoGeoSignals(input.regionId, chateau),
+        summary: chateau ? `demo · ${chateau}` : "demo · terroir fixture",
       };
     }
 
@@ -77,14 +80,15 @@ export const geoAgent: SubAgent<GeoInput, GeoSignals> = {
       };
     }
 
-    // Single-château path: short-circuit if the orchestrator names one.
-    if (input.chateau) {
-      const ch = findChateauByName(input.chateau);
+    // Single-château path: short-circuit if either user (ctx.chateau) or
+    // GPT (input.chateau) names one.
+    if (chateau) {
+      const ch = findChateauByName(chateau);
       if (!ch) {
         return {
           agent: "geo_agent",
           ok: false,
-          error: `Château not found in 1855 dataset: ${input.chateau}`,
+          error: `Château not found in 1855 dataset: ${chateau}`,
           durationMs: Date.now() - t0,
         };
       }

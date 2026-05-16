@@ -1,8 +1,24 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { useT } from "@/lib/i18n/Provider";
-import { BordeauxMap } from "@/components/wine/trade/BordeauxMap";
+
+// react-simple-maps does geo-projection math that yields slightly different
+// floating-point output on Node (SSR) vs V8 in the browser (client), which
+// trips Next's hydration check on Marker transform attributes. Render the
+// map client-only — there's nothing useful to SSR for an interactive map.
+const BordeauxMap = dynamic(
+  () =>
+    import("@/components/wine/trade/BordeauxMap").then((m) => m.BordeauxMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="aspect-[5/4] w-full animate-pulse rounded-md border bg-muted/40" />
+    ),
+  },
+);
+import { BacktestCard } from "@/components/wine/BacktestCard";
 import { ExecutiveSummary } from "@/components/wine/ExecutiveSummary";
 import { RiskCard } from "@/components/wine/RiskCard";
 import { TerroirCard } from "@/components/wine/TerroirCard";
@@ -27,6 +43,7 @@ export function TradeDashboard() {
   const t = useT();
   const first = BORDEAUX_BENCHMARKS[0]!;
   const [selected, setSelected] = useState({ id: first.id, name: first.name });
+  const [chateau, setChateau] = useState<{ name: string; aoc: string } | null>(null);
   const [timeframe, setTimeframe] = useState(defaultTimeframe);
   const { workflowState, details, result, loading, error, run } = useAnalysisFlow();
 
@@ -35,6 +52,7 @@ export function TradeDashboard() {
       region: { id: selected.id, name: selected.name, parent: "bordeaux" },
       timeframe,
       persona: "trade",
+      chateau: chateau?.name,
     };
     void run(body);
   }
@@ -69,12 +87,40 @@ export function TradeDashboard() {
       <div className="grid gap-8 lg:grid-cols-[420px_1fr]">
         <aside className="space-y-6">
           <BordeauxMap
-            selectedId={selected.id}
-            onSelect={(id, name) => setSelected({ id, name })}
+            selectedChateau={chateau?.name ?? null}
+            onChateauSelect={(c) => {
+              if (c) {
+                setChateau({ name: c.name, aoc: c.aoc });
+                setSelected({ id: c.regionId, name: c.regionName });
+              } else {
+                setChateau(null);
+              }
+            }}
           />
 
           <div className="rounded-md border p-4 print:hidden">
             <TimeframePicker value={timeframe} onChange={setTimeframe} />
+
+            {chateau && (
+              <div className="mt-4 flex items-center justify-between gap-3 rounded-sm border bg-muted/40 px-3 py-2">
+                <div className="min-w-0">
+                  <p className="text-[9px] uppercase tracking-luxe text-muted-foreground">
+                    Focus château
+                  </p>
+                  <p className="truncate text-sm font-medium">{chateau.name}</p>
+                  <p className="text-[10px] text-muted-foreground">{chateau.aoc}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setChateau(null)}
+                  className="shrink-0 text-[10px] uppercase tracking-luxe text-muted-foreground hover:text-foreground"
+                  aria-label="Clear château selection"
+                >
+                  ×
+                </button>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={handleRun}
@@ -83,7 +129,7 @@ export function TradeDashboard() {
             >
               {loading
                 ? t("common.running")
-                : `${t("common.run_analysis")} · ${selected.name}`}
+                : `${t("common.run_analysis")} · ${chateau ? chateau.name : selected.name}`}
             </button>
             {error && (
               <div className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
@@ -101,6 +147,7 @@ export function TradeDashboard() {
               {result.feature?.executiveSummary && (
                 <ExecutiveSummary text={result.feature.executiveSummary} />
               )}
+              {result.backtest && <BacktestCard backtest={result.backtest} />}
               <RiskCard result={result} />
               {result.geoSnapshot && <TerroirCard snapshot={result.geoSnapshot} />}
               <DriverDonutChart drivers={result.drivers} />

@@ -13,7 +13,7 @@ interface Props {
   onChange: (tf: Timeframe) => void;
 }
 
-const INTL_LOCALE: Record<Locale, string> = { zh: "zh-CN", fr: "fr-FR", en: "en-US" };
+const INTL_LOCALE: Record<Locale, string> = { fr: "fr-FR", en: "en-US" };
 
 function pad(n: number): string {
   return n.toString().padStart(2, "0");

@@ -27,6 +27,20 @@ export interface AgentContext {
    * call without going through the GPT tool-use routing layer.
    */
   uploads?: UploadMeta[];
+  /**
+   * Trade-side explicit château pick from the BordeauxMap. geo_agent prefers
+   * ctx.chateau over whatever GPT may pass as a tool argument — user intent
+   * wins over inferred routing.
+   */
+  chateau?: string;
+  /**
+   * True when the requested timeframe is entirely in the past. backtest_agent
+   * only fires when this is set, comparing the predicted score against real
+   * critic + market reaction from Tavily.
+   */
+  isBacktest?: boolean;
+  /** Year parsed from timeframe.end — passed to backtest_agent as input. */
+  vintageYear?: number;
   /** Aborts when the request is cancelled or the orchestrator times out. */
   signal: AbortSignal;
 }

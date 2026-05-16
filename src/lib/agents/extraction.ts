@@ -234,7 +234,9 @@ export const extractionAgent: SubAgent<ExtractionInput, ExtractionOutput> = {
             type: "json_schema",
             json_schema: RESPONSE_JSON_SCHEMA,
           },
-          temperature: 0.2,
+          // Note: newer OpenAI reasoning models (gpt-5*, o-series) only
+          // accept the default temperature. We omit the param so any
+          // current GA model works.
         },
         { signal: ctx.signal },
       );

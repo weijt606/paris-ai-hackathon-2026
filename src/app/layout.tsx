@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr" className={`${sans.variable} ${serif.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${sans.variable} ${serif.variable}`} suppressHydrationWarning>
       <body className="min-h-screen bg-background font-sans text-foreground antialiased">
         <I18nProvider>
           <TopNav />
@@ -41,10 +41,13 @@ function TopNav() {
         </Link>
         <div className="flex items-center gap-6 text-[11px] uppercase tracking-luxe text-muted-foreground">
           <Link href="/vineyard" className="transition-colors hover:text-foreground">
-            Domaine
+            Vineyard
           </Link>
           <Link href="/trade" className="transition-colors hover:text-foreground">
-            Négoce
+            Trade
+          </Link>
+          <Link href="/blog" className="transition-colors hover:text-foreground">
+            Blog
           </Link>
           <LocaleSwitcher />
         </div>

@@ -122,6 +122,19 @@ export function useAnalysisFlow() {
       setWorkflowState((s) => ({ ...s, feature_agent: setSub("feature_agent") }));
       setDetails((d) => ({ ...d, feature_agent: detailOf("feature_agent") }));
 
+      // Phase 4b — backtest_agent (only when isBacktest, detected by trace)
+      const hasBacktest = traceMap.backtest_agent !== undefined;
+      if (hasBacktest) {
+        await sleep(200);
+        setWorkflowState((s) => ({ ...s, backtest_agent: "running" }));
+        await sleep(420);
+        setWorkflowState((s) => ({ ...s, backtest_agent: setSub("backtest_agent") }));
+        setDetails((d) => ({ ...d, backtest_agent: detailOf("backtest_agent") }));
+      } else {
+        // Skip the backtest node visually — mark it as "skipped".
+        setWorkflowState((s) => ({ ...s, backtest_agent: "skipped" }));
+      }
+
       // Phase 5 — dashboard / reveal
       await sleep(160);
       setWorkflowState((s) => ({ ...s, dashboard: "ok" }));

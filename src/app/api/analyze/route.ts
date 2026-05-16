@@ -17,6 +17,17 @@ const Body = z.object({
   }),
   persona: z.enum(["vineyard", "trade"]),
   question: z.string().max(500).optional(),
+  chateau: z.string().max(120).optional(),
+  uploads: z
+    .array(
+      z.object({
+        name: z.string().max(200),
+        size: z.number().int().min(0),
+        mime: z.string().max(120),
+      }),
+    )
+    .max(20)
+    .optional(),
 });
 
 export async function POST(req: Request) {
