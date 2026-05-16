@@ -108,48 +108,47 @@ export function TradeDashboard() {
       </header>
 
       {/* Controls — top section */}
-      <section className="mb-10 rounded-md border bg-card p-6 print:hidden animate-fade-in-up">
-        <div className="grid gap-6 md:grid-cols-[1fr_auto_auto] md:items-end">
+      <section className="mb-10 rounded-md border bg-card p-8 print:hidden animate-fade-in-up">
+        <div className="max-w-md">
           <TimeframePicker value={timeframe} onChange={setTimeframe} />
+        </div>
 
-          {chateau ? (
-            <div className="flex items-center gap-3 rounded-sm border bg-muted/40 px-3 py-2">
-              <div className="min-w-0">
-                <p className="text-[9px] uppercase tracking-luxe text-muted-foreground">
+        <div className="mt-8 flex flex-col gap-3 border-t pt-6 md:flex-row md:items-center md:justify-between">
+          <div className="min-w-0">
+            {chateau ? (
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] uppercase tracking-luxe text-muted-foreground">
                   {t("trade.focus_chateau")}
-                </p>
-                <p className="truncate text-sm font-medium">{chateau.name}</p>
-                <p className="text-[10px] text-muted-foreground">{chateau.aoc}</p>
+                </span>
+                <span className="truncate text-sm font-medium">{chateau.name}</span>
+                <span className="text-[10px] text-muted-foreground">{chateau.aoc}</span>
+                <button
+                  type="button"
+                  onClick={() => setChateau(null)}
+                  className="text-[10px] uppercase tracking-luxe text-muted-foreground hover:text-foreground"
+                  aria-label={t("common.clear")}
+                >
+                  ×
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setChateau(null)}
-                className="shrink-0 text-[10px] uppercase tracking-luxe text-muted-foreground hover:text-foreground"
-                aria-label={t("common.clear")}
-              >
-                ×
-              </button>
-            </div>
-          ) : (
-            <p className="text-[10px] uppercase tracking-luxe text-muted-foreground self-center md:self-end md:pb-2">
-              {selected.name}
-            </p>
-          )}
-
+            ) : (
+              <p className="text-[10px] uppercase tracking-luxe text-muted-foreground">
+                {selected.name}
+              </p>
+            )}
+          </div>
           <button
             type="button"
             onClick={handleRun}
             disabled={loading}
-            className="rounded-sm bg-primary px-6 py-3 text-[11px] uppercase tracking-luxe text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="h-11 shrink-0 rounded-sm bg-primary px-8 text-[11px] uppercase tracking-luxe text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            {loading
-              ? t("common.running")
-              : `${t("common.run_analysis")} · ${chateau ? chateau.name : selected.name}`}
+            {loading ? t("common.running") : t("common.run_analysis")}
           </button>
         </div>
 
         {error && (
-          <div className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+          <div className="mt-4 rounded-sm border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
             {error}
           </div>
         )}

@@ -37,6 +37,7 @@ export const DICT = {
   "common.close": { fr: "Fermer", en: "Close" },
   "common.fullscreen": { fr: "Plein écran", en: "Fullscreen" },
   "common.exit_fullscreen": { fr: "Quitter le plein écran", en: "Exit fullscreen" },
+  "common.question": { fr: "Question", en: "Question" },
   "common.question_placeholder": {
     fr: "Optionnel : précisez votre question, p. ex. risque de gel en avril",
     en: "Optional: focus question, e.g. frost risk in April",

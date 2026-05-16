@@ -107,60 +107,64 @@ export function VineyardDashboard() {
       </header>
 
       {/* Controls — top section */}
-      <section className="mb-10 rounded-md border bg-card p-6 print:hidden space-y-6 animate-fade-in-up">
-        <div className="grid gap-5 md:grid-cols-2">
+      <section className="mb-10 rounded-md border bg-card p-8 print:hidden animate-fade-in-up">
+        <div className="grid gap-6 md:grid-cols-2">
           <RegionPicker value={region.id} onChange={setRegion} />
           <TimeframePicker value={timeframe} onChange={setTimeframe} />
         </div>
 
-        <UploadArea uploads={uploads} onChange={setUploads} />
+        <div className="mt-6 grid gap-6 md:grid-cols-2">
+          <label className="flex flex-col gap-2 text-sm">
+            <span className="text-[10px] uppercase tracking-luxe text-muted-foreground">
+              {t("common.question")}
+            </span>
+            <textarea
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              rows={4}
+              placeholder={t("common.question_placeholder")}
+              className="min-h-[7.5rem] flex-1 resize-none rounded-sm border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+          </label>
+          <UploadArea uploads={uploads} onChange={setUploads} />
+        </div>
 
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-[10px] uppercase tracking-luxe text-muted-foreground">
-            {t("common.question_placeholder").split(":")[0] ?? t("common.question_placeholder")}
-          </span>
-          <textarea
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            rows={2}
-            placeholder={t("common.question_placeholder")}
-            className="rounded-md border bg-background px-3 py-2 text-sm"
-          />
-        </label>
-
-        {chateau && (
-          <div className="flex items-center gap-3 rounded-sm border bg-muted/40 px-3 py-2">
-            <div className="min-w-0 flex-1">
-              <p className="text-[9px] uppercase tracking-luxe text-muted-foreground">
-                {t("trade.focus_chateau")}
+        <div className="mt-8 flex flex-col gap-3 border-t pt-6 md:flex-row md:items-center md:justify-between">
+          <div className="min-w-0">
+            {chateau ? (
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] uppercase tracking-luxe text-muted-foreground">
+                  {t("trade.focus_chateau")}
+                </span>
+                <span className="truncate text-sm font-medium">{chateau.name}</span>
+                <span className="text-[10px] text-muted-foreground">{chateau.aoc}</span>
+                <button
+                  type="button"
+                  onClick={() => setChateau(null)}
+                  className="text-[10px] uppercase tracking-luxe text-muted-foreground hover:text-foreground"
+                  aria-label={t("common.clear")}
+                >
+                  ×
+                </button>
+              </div>
+            ) : (
+              <p className="text-[10px] uppercase tracking-luxe text-muted-foreground">
+                {region.name}
               </p>
-              <p className="truncate text-sm font-medium">{chateau.name}</p>
-              <p className="text-[10px] text-muted-foreground">{chateau.aoc}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setChateau(null)}
-              className="text-[10px] uppercase tracking-luxe text-muted-foreground hover:text-foreground"
-              aria-label={t("common.clear")}
-            >
-              ×
-            </button>
+            )}
           </div>
-        )}
-
-        <button
-          type="button"
-          onClick={handleRun}
-          disabled={loading}
-          className="w-full rounded-sm bg-primary px-6 py-3 text-[11px] uppercase tracking-luxe text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-        >
-          {loading
-            ? t("common.running")
-            : `${t("common.run_analysis")} · ${chateau ? chateau.name : region.name}`}
-        </button>
+          <button
+            type="button"
+            onClick={handleRun}
+            disabled={loading}
+            className="h-11 shrink-0 rounded-sm bg-primary px-8 text-[11px] uppercase tracking-luxe text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {loading ? t("common.running") : t("common.run_analysis")}
+          </button>
+        </div>
 
         {error && (
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+          <div className="mt-4 rounded-sm border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
             {error}
           </div>
         )}

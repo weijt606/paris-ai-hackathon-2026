@@ -59,34 +59,35 @@ export function TimeframePicker({ value, onChange }: Props) {
   }
 
   return (
-    <div className="space-y-2">
-      <span className="text-xs uppercase tracking-wide text-muted-foreground">
-        {t("common.timeframe")}
-      </span>
-
-      <div className="inline-flex w-full rounded-md border bg-background p-0.5 text-xs">
-        {(["year", "month", "range"] as const).map((m) => (
-          <button
-            key={m}
-            type="button"
-            onClick={() => changeMode(m)}
-            className={cn(
-              "flex-1 rounded-sm px-2 py-1 transition",
-              mode === m
-                ? "bg-foreground text-background"
-                : "text-muted-foreground hover:bg-muted",
-            )}
-          >
-            {t(`timeframe.mode.${m}` as const)}
-          </button>
-        ))}
+    <div className="flex flex-col gap-2">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[10px] uppercase tracking-luxe text-muted-foreground">
+          {t("common.timeframe")}
+        </span>
+        <div className="inline-flex rounded-sm border bg-background p-0.5 text-[10px]">
+          {(["year", "month", "range"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => changeMode(m)}
+              className={cn(
+                "rounded-[3px] px-2 py-0.5 uppercase tracking-luxe transition",
+                mode === m
+                  ? "bg-foreground text-background"
+                  : "text-muted-foreground hover:bg-muted",
+              )}
+            >
+              {t(`timeframe.mode.${m}` as const)}
+            </button>
+          ))}
+        </div>
       </div>
 
       {mode === "year" && (
         <select
           value={year}
           onChange={(e) => changeYear(Number(e.target.value))}
-          className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+          className="h-10 w-full rounded-sm border bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
           aria-label={t("timeframe.label.year")}
         >
           {yearOptions.map((y) => (
@@ -102,7 +103,7 @@ export function TimeframePicker({ value, onChange }: Props) {
           <select
             value={year}
             onChange={(e) => changeYear(Number(e.target.value))}
-            className="rounded-md border bg-background px-3 py-2 text-sm"
+            className="h-10 rounded-sm border bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
             aria-label={t("timeframe.label.year")}
           >
             {yearOptions.map((y) => (
@@ -114,7 +115,7 @@ export function TimeframePicker({ value, onChange }: Props) {
           <select
             value={month}
             onChange={(e) => changeMonth(Number(e.target.value))}
-            className="rounded-md border bg-background px-3 py-2 text-sm"
+            className="h-10 rounded-sm border bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
             aria-label={t("timeframe.label.month")}
           >
             {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
@@ -132,22 +133,18 @@ export function TimeframePicker({ value, onChange }: Props) {
             type="date"
             value={value.start}
             onChange={(e) => onChange({ ...value, start: e.target.value })}
-            className="rounded-md border bg-background px-3 py-2 text-sm"
+            className="h-10 rounded-sm border bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
             aria-label={t("common.start_date")}
           />
           <input
             type="date"
             value={value.end}
             onChange={(e) => onChange({ ...value, end: e.target.value })}
-            className="rounded-md border bg-background px-3 py-2 text-sm"
+            className="h-10 rounded-sm border bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
             aria-label={t("common.end_date")}
           />
         </div>
       )}
-
-      <p className="font-mono text-[10px] text-muted-foreground">
-        {value.start} → {value.end}
-      </p>
     </div>
   );
 }
