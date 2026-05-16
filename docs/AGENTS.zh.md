@@ -11,10 +11,13 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│  User Dashboard  (src/app/page.tsx + src/components/wine/*)      │
-│   • Persona toggle: vineyard | trade                              │
-│   • Region picker: Burgundy / Bordeaux 各 3 个静态产区             │
-│   • RiskCard + Agent trace                                        │
+│  Landing  /                — EntryChoice (酒庄 / 酒商) + 中/FR 切换 │
+├──────────────────────────────────────────────────────────────────┤
+│  /vineyard                                  /trade                 │
+│   • UploadArea (drag-drop)                   • Bordeaux Map        │
+│   • Region picker                              (react-simple-maps) │
+│   • RiskCard + 2 charts                      • 4-chart grid        │
+│   • Export + Subscribe                         + Export + Subscribe│
 └────────────────────────┬─────────────────────────────────────────┘
                          │ POST /api/analyze
                          ▼
@@ -51,6 +54,16 @@
 - 每个 sub-agent **替换 `run()` body 即可**，契约不变就不会影响下游。
 
 ---
+
+**UI 模块（已搭好骨架，dev team 可迭代视觉/交互）：**
+
+| 入口 | 文件 | 关键组件 |
+|---|---|---|
+| 落地 | `src/app/page.tsx` | `EntryChoice` 两个 CTA 卡 |
+| 酒庄 | `src/app/vineyard/page.tsx` | `VineyardDashboard`, `UploadArea`（拖拽上传，文件元数据进入 AnalyzeInput.uploads） |
+| 酒商 | `src/app/trade/page.tsx` | `TradeDashboard`, `BordeauxMap`（react-simple-maps + inline GeoJSON）, 4 个 Recharts |
+| 国际化 | `src/lib/i18n/{dict,Provider}.tsx` | `useT()` hook + `LocaleSwitcher` |
+| 共享 | `src/components/wine/shared/` | `ExportButton`（window.print）, `SubscribeDialog`（→ `/api/subscribe` stub） |
 
 ## 2. 文件地图与 Owner
 

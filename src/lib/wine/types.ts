@@ -27,12 +27,21 @@ export interface Timeframe {
   end: string;
 }
 
+export interface UploadMeta {
+  name: string;
+  /** Bytes. */
+  size: number;
+  mime: string;
+}
+
 export interface AnalyzeInput {
   region: Pick<Region, "id" | "name" | "parent">;
   timeframe: Timeframe;
   persona: Persona;
   /** Optional natural-language refinement, e.g. "focus on frost risk in April". */
   question?: string;
+  /** Metadata of vineyard-uploaded supporting docs (file contents not transmitted in MVP). */
+  uploads?: UploadMeta[];
 }
 
 export interface RiskDriver {

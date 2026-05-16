@@ -28,16 +28,30 @@ src/
 ├── app/
 │   ├── api/
 │   │   ├── analyze/route.ts       # POST → orchestrator
+│   │   ├── subscribe/route.ts     # POST → email subscribe (stub)
 │   │   └── health/route.ts
+│   ├── vineyard/page.tsx          # vineyard dashboard (with upload)
+│   ├── trade/page.tsx             # trade dashboard (with Bordeaux map + charts)
 │   ├── scaffold/page.tsx          # provider/integration status
-│   ├── page.tsx                   # wine dashboard
-│   ├── layout.tsx · globals.css
-├── components/wine/               # dashboard UI
-│   ├── AnalyzePanel.tsx           # parent: state + fetch
-│   ├── PersonaToggle.tsx          # vineyard | trade
-│   ├── RegionPicker.tsx           # Burgundy / Bordeaux
-│   ├── RiskCard.tsx               # score, drivers, recommendations
-│   └── SignalsList.tsx            # agent trace
+│   ├── page.tsx                   # landing — entry choice
+│   ├── layout.tsx · globals.css   # I18nProvider + top nav
+├── components/
+│   ├── i18n/LocaleSwitcher.tsx    # FR / 中 toggle
+│   └── wine/
+│       ├── EntryChoice.tsx        # landing CTA cards
+│       ├── RegionPicker.tsx · RiskCard.tsx · SignalsList.tsx
+│       ├── vineyard/
+│       │   ├── VineyardDashboard.tsx
+│       │   └── UploadArea.tsx     # drag-drop, in-memory only
+│       ├── trade/
+│       │   ├── TradeDashboard.tsx
+│       │   └── BordeauxMap.tsx    # react-simple-maps + inline GeoJSON
+│       ├── charts/
+│       │   ├── DriverBarChart.tsx · WeatherLineChart.tsx
+│       │   ├── RegionalRiskChart.tsx · SentimentDonut.tsx
+│       └── shared/
+│           ├── ExportButton.tsx   # window.print() with @media print CSS
+│           └── SubscribeDialog.tsx
 ├── lib/
 │   ├── agents/                    # ← agent framework
 │   │   ├── orchestrator.ts        # OpenAI tool-use loop (routing layer)
@@ -50,6 +64,11 @@ src/
 │   │       └── tavily.ts          # public-web grounding (stub)
 │   ├── ai/openai.ts               # lazy OpenAI client (used by orchestrator)
 │   ├── training/pioneer.ts        # Pioneer GLiNER2 classifier (classify())
+│   ├── i18n/                      # zh + fr dictionary, React provider
+│   ├── wine/
+│   │   ├── bordeaux-geo.ts        # inline France GeoJSON (~30 vertices)
+│   │   └── bordeaux-benchmarks.ts # static appellation scores for map+chart
+│   └── demo/charts.ts             # client-safe chart fixtures (weather, sentiment)
 │   ├── wine/                      # domain
 │   │   ├── types.ts               # AnalyzeInput, AnalyzeResult, etc.
 │   │   └── regions.ts             # static Burgundy + Bordeaux list
@@ -68,6 +87,15 @@ CLAUDE.md                          # project rules (loaded into every AI session
 ## For collaborators
 
 Read [`docs/AGENTS.zh.md`](docs/AGENTS.zh.md) first — it lays out who owns which sub-agent, the SubAgent contract, the 4-step recipe to replace a stub, and the PR checklist.
+
+## UI
+
+- **Two entry routes**: `/vineyard` (with file upload) and `/trade` (with Bordeaux map + 4-chart dashboard)
+- **Bilingual**: 中 / FR toggle in top nav (in-memory, no URL change)
+- **Charts**: Recharts (drivers bar · weather timeline · regional risk · market sentiment)
+- **Map**: react-simple-maps with inline France GeoJSON, six Bordeaux markers colored by risk
+- **Export**: `window.print()` with `@media print` CSS hiding chrome
+- **Subscribe**: email form → `/api/subscribe` (stub; replace with Resend/Postmark)
 
 ## Conventions
 
