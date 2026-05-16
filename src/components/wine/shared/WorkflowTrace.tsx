@@ -14,6 +14,7 @@ export type NodeKey =
   | "extraction_agent"
   | "pioneer"
   | "feature_agent"
+  | "backtest_agent"
   | "dashboard";
 
 export interface WorkflowState {
@@ -25,6 +26,7 @@ export interface WorkflowState {
   extraction_agent: AgentState;
   pioneer: AgentState;
   feature_agent: AgentState;
+  backtest_agent: AgentState;
   dashboard: AgentState;
 }
 
@@ -37,6 +39,7 @@ export const INITIAL_WORKFLOW: WorkflowState = {
   extraction_agent: "pending",
   pioneer: "pending",
   feature_agent: "pending",
+  backtest_agent: "pending",
   dashboard: "pending",
 };
 
@@ -61,10 +64,11 @@ const NODES: Record<NodeKey, NodeDef> = {
   weather_agent:     { cx: 28, cy: 76,  w: 44, h: 16, label: "weather",      sub: "climate",          icon: "W", kind: "agent" },
   geo_agent:         { cx: 90, cy: 76,  w: 44, h: 16, label: "geo",          sub: "terroir",          icon: "G", kind: "agent" },
   tavily_agent:      { cx: 152, cy: 76, w: 44, h: 16, label: "tavily",       sub: "public web",       icon: "T", kind: "agent" },
-  extraction_agent:  { cx: 78, cy: 110, w: 70, h: 20, label: "extraction",   sub: "risk evaluator",   icon: "E", kind: "router" },
-  feature_agent:     { cx: 78, cy: 142, w: 70, h: 20, label: "feature",      sub: "summary · report", icon: "F", kind: "agent" },
-  pioneer:           { cx: 156, cy: 142,w: 36, h: 14, label: "pioneer",      sub: "wine LLM",         icon: "P", kind: "tool" },
-  dashboard:         { cx: 78, cy: 174, w: 70, h: 18, label: "dashboard",    sub: "result",           icon: "D", kind: "output" },
+  extraction_agent:  { cx: 78, cy: 108, w: 70, h: 20, label: "extraction",   sub: "risk evaluator",   icon: "E", kind: "router" },
+  feature_agent:     { cx: 78, cy: 138, w: 70, h: 20, label: "feature",      sub: "summary · report", icon: "F", kind: "agent" },
+  pioneer:           { cx: 156, cy: 138,w: 36, h: 14, label: "pioneer",      sub: "wine LLM",         icon: "P", kind: "tool" },
+  backtest_agent:    { cx: 78, cy: 168, w: 70, h: 18, label: "backtest",     sub: "tavily · critics",  icon: "B", kind: "agent" },
+  dashboard:         { cx: 78, cy: 196, w: 70, h: 18, label: "dashboard",    sub: "result",           icon: "D", kind: "output" },
 };
 
 interface Edge {
@@ -84,7 +88,8 @@ const EDGES: Edge[] = [
   { from: "tavily_agent", to: "extraction_agent" },
   { from: "extraction_agent", to: "feature_agent" },
   { from: "feature_agent", to: "pioneer", style: "tool" },
-  { from: "feature_agent", to: "dashboard" },
+  { from: "feature_agent", to: "backtest_agent" },
+  { from: "backtest_agent", to: "dashboard" },
 ];
 
 const KIND_ACCENT: Record<NodeKind, string> = {
@@ -146,7 +151,7 @@ export function WorkflowTrace({ state, details, hasUploads = false }: Props) {
       </header>
 
       <svg
-        viewBox="0 0 200 192"
+        viewBox="0 0 200 215"
         className="block w-full"
         role="img"
         aria-label={t("workflow.title")}
@@ -180,7 +185,7 @@ export function WorkflowTrace({ state, details, hasUploads = false }: Props) {
           </marker>
         </defs>
 
-        <rect x="0" y="0" width="200" height="192" fill="url(#wf-grid)" />
+        <rect x="0" y="0" width="200" height="215" fill="url(#wf-grid)" />
 
         {/* Direct-entry "uploads" edge — bypasses GPT routing, INPUT → EXTRACTION.
             Rendered only when the user attached files on the vineyard side. */}
@@ -295,6 +300,7 @@ export function WorkflowTrace({ state, details, hasUploads = false }: Props) {
             "tavily_agent",
             "extraction_agent",
             "feature_agent",
+            "backtest_agent",
           ] as NodeKey[]
         ).map((key) => {
           const s = state[key];

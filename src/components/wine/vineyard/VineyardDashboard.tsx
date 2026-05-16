@@ -3,6 +3,7 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import { useT } from "@/lib/i18n/Provider";
+import { BacktestCard } from "@/components/wine/BacktestCard";
 import { ExecutiveSummary } from "@/components/wine/ExecutiveSummary";
 import { RegionPicker } from "@/components/wine/RegionPicker";
 import { RiskCard } from "@/components/wine/RiskCard";
@@ -150,6 +151,7 @@ export function VineyardDashboard() {
               {result.feature?.executiveSummary && (
                 <ExecutiveSummary text={result.feature.executiveSummary} />
               )}
+              {result.backtest && <BacktestCard backtest={result.backtest} />}
               <RiskCard result={result} />
               {result.geoSnapshot && <TerroirCard snapshot={result.geoSnapshot} />}
               <DriverDonutChart drivers={result.drivers} />

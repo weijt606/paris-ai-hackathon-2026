@@ -18,6 +18,7 @@ const BordeauxMap = dynamic(
     ),
   },
 );
+import { BacktestCard } from "@/components/wine/BacktestCard";
 import { ExecutiveSummary } from "@/components/wine/ExecutiveSummary";
 import { RiskCard } from "@/components/wine/RiskCard";
 import { TerroirCard } from "@/components/wine/TerroirCard";
@@ -146,6 +147,7 @@ export function TradeDashboard() {
               {result.feature?.executiveSummary && (
                 <ExecutiveSummary text={result.feature.executiveSummary} />
               )}
+              {result.backtest && <BacktestCard backtest={result.backtest} />}
               <RiskCard result={result} />
               {result.geoSnapshot && <TerroirCard snapshot={result.geoSnapshot} />}
               <DriverDonutChart drivers={result.drivers} />

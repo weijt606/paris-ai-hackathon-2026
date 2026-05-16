@@ -46,6 +46,9 @@ function TopNav() {
           <Link href="/trade" className="transition-colors hover:text-foreground">
             Trade
           </Link>
+          <Link href="/blog" className="transition-colors hover:text-foreground">
+            Blog
+          </Link>
           <LocaleSwitcher />
         </div>
       </div>

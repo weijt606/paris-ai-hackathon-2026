@@ -14,10 +14,12 @@ import { geoAgent } from "@/lib/agents/sub-agents/geo";
 import { tavilyAgent } from "@/lib/agents/sub-agents/tavily";
 import { extractionAgent } from "@/lib/agents/extraction";
 import { featureAgent } from "@/lib/agents/feature";
+import { backtestAgent } from "@/lib/agents/sub-agents/backtest";
 import type {
   AnalyzeInput,
   AnalyzeResult,
   AgentStepTrace,
+  BacktestSnapshot,
   FeatureSummary,
   GeoSnapshot,
   Recommendation,
@@ -52,6 +54,7 @@ register(geoAgent);
 register(tavilyAgent);
 register(extractionAgent);
 register(featureAgent);
+register(backtestAgent);
 
 function toolDescriptors(): OpenAI.Chat.Completions.ChatCompletionTool[] {
   return Array.from(REGISTRY.values()).map((a) => ({
@@ -76,11 +79,19 @@ Procedure:
    - driversSummary: a single-sentence summary of extraction's top drivers
    - recommendationsSummary: a single-sentence summary of extraction's recommendations
    - rationale: extraction's rationale (verbatim if short, else compressed)
-4. After feature_agent returns, end the turn with one short sentence. The host harvests both extraction and feature outputs from the tool trace.
+4. After feature_agent returns, if the host indicates **isBacktest=true**, call **backtest_agent** with:
+   - regionId · regionName · year (the vintage year)
+   - persona
+   - predictedScore (extraction's risk score)
+   - predictedBand (extraction's qualityBand)
+   - driversSummary (one-sentence)
+   Skip this step when isBacktest is not set (forward-looking analyses).
+5. After backtest_agent returns (or after feature_agent if skipped), end the turn with one short sentence.
 
 Rules:
 - Never call extraction_agent before the three upstream agents have returned.
 - Never call feature_agent before extraction_agent has returned.
+- Never call backtest_agent before feature_agent has returned, and only when isBacktest is set.
 - Always pass the regionId the host provided; never invent one.
 - If a sub-agent fails, proceed and note the gap to extraction_agent.
 - Be concise. No marketing copy.`;
@@ -144,12 +155,20 @@ export async function analyze(
   const cached = cacheGet(key);
   if (cached) return cached;
 
+  const today = new Date().toISOString().slice(0, 10);
+  const isBacktest = input.timeframe.end < today;
+  const vintageYear = isBacktest
+    ? Number.parseInt(input.timeframe.end.slice(0, 4), 10)
+    : undefined;
+
   const ctx: AgentContext = {
     region: input.region,
     timeframe: input.timeframe,
     persona: input.persona,
     uploads: input.uploads,
     chateau: input.chateau,
+    isBacktest,
+    vintageYear: Number.isFinite(vintageYear) ? vintageYear : undefined,
     signal: opts.signal ?? new AbortController().signal,
   };
 
@@ -163,6 +182,9 @@ export async function analyze(
     input.question ? `Refinement: ${input.question}` : "",
     input.chateau
       ? `Focus château: ${input.chateau} — call geo_agent in single-site mode by passing chateau="${input.chateau}".`
+      : "",
+    isBacktest && vintageYear
+      ? `isBacktest=true · vintage year=${vintageYear} — after feature_agent, call backtest_agent for critic/market comparison.`
       : "",
   ]
     .filter(Boolean)
@@ -253,10 +275,12 @@ function harvest(input: AnalyzeInput, trace: AgentResult[]): AnalyzeResult {
   const extraction = lastFor("extraction_agent");
   const feature = lastFor("feature_agent");
   const geo = lastFor("geo_agent");
+  const backtest = lastFor("backtest_agent");
 
   const extractionData = extraction?.data as Partial<ExtractionOutput> | undefined;
   const featureData = feature?.data as FeatureSummary | undefined;
   const geoData = geo?.data as GeoSnapshot | undefined;
+  const backtestData = backtest?.data as BacktestSnapshot | undefined;
 
   const score = extractionData?.score ?? 0;
   const sawFailure = trace.some((r) => !r.ok);
@@ -274,6 +298,7 @@ function harvest(input: AnalyzeInput, trace: AgentResult[]): AnalyzeResult {
     rationale: extractionData?.rationale,
     feature: featureData ?? null,
     geoSnapshot: geoData ?? null,
+    backtest: backtestData ?? null,
     trace: trace.map<AgentStepTrace>((r) => ({
       agent: r.agent,
       ok: r.ok,

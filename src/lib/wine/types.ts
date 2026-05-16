@@ -60,6 +60,38 @@ export interface GeoSnapshot {
   notes: string[];
 }
 
+/** A single critic-score / market-reaction observation for backtest. */
+export interface BacktestCritic {
+  /** Source label (e.g. "Wine Advocate", "Decanter", "Liv-ex"). */
+  source: string;
+  /** Numeric score on the source's scale (e.g. 96 on WA's 100-pt scale). */
+  score?: number;
+  /** Optional source-specific scale label, e.g. "/100" or "+18% YoY". */
+  scale?: string;
+  /** One-line direct quote / summary from the source. */
+  quote?: string;
+  /** URL of the source article when available. */
+  url?: string;
+}
+
+/** Output of the backtest_agent — appears only for historical timeframes. */
+export interface BacktestSnapshot {
+  /** True if timeframe.end was in the past relative to runtime. */
+  isBacktest: true;
+  /** The year being backtested (parsed from timeframe.end). */
+  year: number;
+  /** Our predicted RISK score for that vintage (echo of result.riskScore). */
+  predictedScore: number;
+  /** Predicted quality band (echo from extraction). */
+  predictedBand?: "Great" | "Excellent" | "Good" | "Average" | "Poor";
+  /** Actual critic / market observations harvested from Tavily search. */
+  critics: BacktestCritic[];
+  /** Short prose summary of how reality compared to our prediction. */
+  accuracySummary: string;
+  /** One of "high_agreement" / "moderate_agreement" / "divergent" — directional verdict. */
+  verdict: "high_agreement" | "moderate_agreement" | "divergent";
+}
+
 export interface RiskDriver {
   source: "weather" | "geo" | "tavily" | "extraction";
   signal: string;
@@ -110,6 +142,8 @@ export interface AnalyzeResult {
   feature?: FeatureSummary | null;
   /** Geo-agent structured snapshot (elevation / soil / frost-pockets / AOC mix) — drives the Terroir card. */
   geoSnapshot?: GeoSnapshot | null;
+  /** Backtest snapshot — only populated when the timeframe is in the past. */
+  backtest?: BacktestSnapshot | null;
   /** Step-by-step trace shown in the dashboard for transparency. */
   trace: AgentStepTrace[];
   generatedAt: string;

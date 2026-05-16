@@ -33,6 +33,14 @@ export interface AgentContext {
    * wins over inferred routing.
    */
   chateau?: string;
+  /**
+   * True when the requested timeframe is entirely in the past. backtest_agent
+   * only fires when this is set, comparing the predicted score against real
+   * critic + market reaction from Tavily.
+   */
+  isBacktest?: boolean;
+  /** Year parsed from timeframe.end — passed to backtest_agent as input. */
+  vintageYear?: number;
   /** Aborts when the request is cancelled or the orchestrator times out. */
   signal: AbortSignal;
 }

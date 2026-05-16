@@ -169,6 +169,25 @@ export const DICT = {
     en: "You'll receive a digest like this:",
   },
 
+  // ── backtest ──────────────────────────────────────────────────────────
+  "backtest.title": { fr: "Validation rétroactive", en: "Backtest verification" },
+  "backtest.predicted": { fr: "Prédit", en: "Predicted" },
+  "backtest.actual": { fr: "Réel", en: "Actual" },
+  "backtest.verdict.high_agreement": { fr: "Forte concordance", en: "High agreement" },
+  "backtest.verdict.moderate_agreement": { fr: "Concordance partielle", en: "Moderate agreement" },
+  "backtest.verdict.divergent": { fr: "Divergent", en: "Divergent" },
+  "backtest.no_critics": {
+    fr: "Aucune donnée critique récupérée — configurez Tavily pour une comparaison réelle.",
+    en: "No critic data retrieved — configure Tavily for real-world comparison.",
+  },
+
+  // ── blog ──────────────────────────────────────────────────────────────
+  "blog.title": { fr: "Comment Wine Signals fonctionne", en: "How Wine Signals works" },
+  "blog.subtitle": {
+    fr: "Architecture, agents, et FAQ",
+    en: "Architecture, agents, and FAQ",
+  },
+
   // ── workflow ──────────────────────────────────────────────────────────
   "workflow.title": { fr: "Flux de travail", en: "Workflow" },
   "workflow.state.pending": { fr: "En attente", en: "Pending" },
