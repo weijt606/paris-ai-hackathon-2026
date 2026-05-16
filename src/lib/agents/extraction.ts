@@ -1,54 +1,166 @@
 import "server-only";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { env, isDemoMode, sponsors } from "@/lib/env";
+import { openaiClient } from "@/lib/ai/openai";
 import type { SubAgent } from "@/lib/agents/types";
-import type { Persona, RiskDriver, Recommendation } from "@/lib/wine/types";
+import type { Persona, Recommendation, RiskDriver } from "@/lib/wine/types";
+
+// ─── Types ─────────────────────────────────────────────────────────────
 
 export interface ExtractionInput {
   regionId: string;
   persona: Persona;
-  /**
-   * Compact signal bag the orchestrator collected from upstream agents.
-   * Pass raw text or a JSON snippet — extraction reasons over both.
-   */
   weatherSignal?: string;
   geoSignal?: string;
   tavilySignal?: string;
 }
 
 export interface ExtractionOutput {
-  /** 0–100 cumulative risk. */
+  /** 0–100 RISK score. 0 = excellent vintage outlook, 100 = severe risk. */
   score: number;
   drivers: RiskDriver[];
   recommendations: Recommendation[];
   rationale: string;
+  /** Underlying vintage-quality band per the schema (before inversion). */
+  qualityBand?: "Great" | "Excellent" | "Good" | "Average" | "Poor";
+  /** IDs of hard event gates the LLM identified as active. */
+  activeGates?: string[];
 }
 
-/**
- * STUB — heuristic risk evaluator. Owner: dev team (modelling track).
- *
- * Recommended replacement: tiered LLM call with graceful degradation.
- *
- *   Tier 1 — Pioneer.ai (preferred sponsor path):
- *     `pioneerChat([...], { responseFormat: { type:"json_schema", ... } })`
- *     Uses hosted gpt-5.5 today; later swap PIONEER_MODEL_ID to a
- *     Pioneer-fine-tuned wine-domain local model (same code path).
- *
- *   Tier 2 — OpenAI structured output:
- *     `openaiClient().chat.completions.create({ response_format: {...} })`
- *     Fallback when Pioneer is unavailable or returns null.
- *
- *   Tier 3 — heuristic (this stub):
- *     Deterministic placeholder so the orchestrator stays demoable when
- *     both upstream calls fail.
- *
- * Contract guarantees:
- *  - score is bounded 0–100
- *  - drivers[].weight sums to ≤ 1.0
- *  - recommendations[].persona matches input.persona
- */
+// ─── Schema loading ────────────────────────────────────────────────────
+
+const SCHEMA_PATH = "data/wine-vintage-quality-schema.json";
+
+let _schemaText: string | null = null;
+function loadSchemaText(): string {
+  if (_schemaText === null) {
+    try {
+      _schemaText = readFileSync(path.join(process.cwd(), SCHEMA_PATH), "utf-8");
+    } catch (err) {
+      console.warn(`[extraction] could not load ${SCHEMA_PATH}:`, err);
+      _schemaText = "";
+    }
+  }
+  return _schemaText;
+}
+
+// ─── OpenAI prompt + response schema ───────────────────────────────────
+
+const SYSTEM_PROMPT_HEAD = `You are the extraction agent in a wine-intelligence pipeline for Burgundy and Bordeaux.
+
+You convert upstream signals (climate, geographical/terroir, public-web) into a structured RISK assessment for a specific French wine region. Your output drives a dashboard for two personas: vineyard operators and trade buyers.
+
+SCORE SEMANTICS (IMPORTANT):
+- Output \`score\` in the range 0–100.
+- Score is RISK: 0 = excellent vintage outlook (low risk), 100 = severe risk / poor outlook.
+- The schema below describes vintage QUALITY (high = good). You must INVERT it to produce risk: risk ≈ 100 − quality.
+
+PROCEDURE:
+1. From the available signals, infer best-effort feature values for the schema. When a feature has no signal coverage, treat it as neutral (~60 quality) and reduce its effective weight; mention the gap in the rationale.
+2. Compute weightedBaseQuality = Σ(featureScore · featureWeight) over features with coverage.
+3. Apply hard-event gates: cap quality at the gate's maximumScoreCap when its condition appears triggered. Record the gate ids in \`activeGates\`.
+4. Apply dynamic adjustments where applicable.
+5. Clamp quality to [0, 100], then set \`score = 100 − quality\`.
+6. Map the QUALITY value (not the risk) into one of the schema grade bands and return as \`qualityBand\`.
+7. Produce 3–5 drivers summarising the dominant influences. Each driver: source ∈ {weather, geo, tavily, extraction}, signal (one-line explanation), weight (0–1, weights sum ≤ 1).
+8. Produce 2–3 persona-specific recommendations. All recommendations must use the requested persona.
+
+Be concise. No prose padding. Output language: English.
+
+WINE-VINTAGE-QUALITY-SCHEMA (v1):
+`;
+
+const RESPONSE_JSON_SCHEMA = {
+  name: "wine_extraction",
+  strict: true,
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["score", "qualityBand", "drivers", "recommendations", "activeGates", "rationale"],
+    properties: {
+      score: {
+        type: "number",
+        description: "0–100 RISK score (0 = great outlook, 100 = severe risk).",
+      },
+      qualityBand: {
+        type: "string",
+        enum: ["Great", "Excellent", "Good", "Average", "Poor"],
+        description: "Underlying vintage quality band per the schema (before inversion).",
+      },
+      drivers: {
+        type: "array",
+        minItems: 1,
+        maxItems: 6,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["source", "signal", "weight"],
+          properties: {
+            source: { type: "string", enum: ["weather", "geo", "tavily", "extraction"] },
+            signal: { type: "string" },
+            weight: { type: "number", minimum: 0, maximum: 1 },
+          },
+        },
+      },
+      recommendations: {
+        type: "array",
+        minItems: 1,
+        maxItems: 4,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["persona", "action", "evidence"],
+          properties: {
+            persona: { type: "string", enum: ["vineyard", "trade"] },
+            action: { type: "string" },
+            evidence: { type: "string" },
+          },
+        },
+      },
+      activeGates: {
+        type: "array",
+        items: { type: "string" },
+        description: "IDs of hard event gates the model identified as active.",
+      },
+      rationale: {
+        type: "string",
+        description: "1–3 sentences explaining the score.",
+      },
+    },
+  },
+} as const;
+
+// ─── Heuristic fallback (tier 3) ───────────────────────────────────────
+
+function heuristicFallback(input: ExtractionInput): ExtractionOutput {
+  const present = [
+    input.weatherSignal && "weather",
+    input.geoSignal && "geo",
+    input.tavilySignal && "tavily",
+  ].filter(Boolean) as string[];
+  const score = 30 + present.length * 10;
+  return {
+    score,
+    drivers: present.map((p) => ({
+      source: p as RiskDriver["source"],
+      signal: `[heuristic] contribution from ${p}`,
+      weight: Number((1 / Math.max(present.length, 1)).toFixed(2)),
+    })),
+    recommendations:
+      input.persona === "vineyard"
+        ? [{ persona: "vineyard", action: "[heuristic] mitigation based on dominant driver" }]
+        : [{ persona: "trade", action: "[heuristic] allocation / hedge guidance" }],
+    rationale: `Heuristic fallback (OpenAI unavailable or schema missing). Using ${present.length}/3 upstream signals.`,
+  };
+}
+
+// ─── Agent ─────────────────────────────────────────────────────────────
+
 export const extractionAgent: SubAgent<ExtractionInput, ExtractionOutput> = {
   name: "extraction_agent",
   description:
-    "Evaluate cumulative wine-region risk from collected weather/geo/public signals. Returns a 0–100 score with weighted drivers and persona-specific recommendations. CALL ONLY AFTER weather/geo/tavily have returned — it depends on their outputs.",
+    "Evaluate cumulative wine-region risk from collected weather/geo/public signals. Returns a 0–100 RISK score (low = great vintage outlook) with weighted drivers, persona-specific recommendations, and the underlying vintage-quality band. Driven by an OpenAI Chat Completions call against the wine-vintage-quality-schema. CALL ONLY AFTER weather/geo/tavily have returned.",
   input_schema: {
     type: "object",
     properties: {
@@ -60,43 +172,119 @@ export const extractionAgent: SubAgent<ExtractionInput, ExtractionOutput> = {
     },
     required: ["regionId", "persona"],
   },
-  async run(input) {
-    const present = [
-      Boolean(input.weatherSignal) && "weather",
-      Boolean(input.geoSignal) && "geo",
-      Boolean(input.tavilySignal) && "tavily",
-    ].filter(Boolean) as string[];
 
-    const score = 30 + present.length * 10;
-    const drivers: RiskDriver[] = present.map((p) => ({
-      source: p as RiskDriver["source"],
-      signal: `[stub] heuristic contribution from ${p}`,
-      weight: Number((1 / Math.max(present.length, 1)).toFixed(2)),
-    }));
+  async run(input, ctx) {
+    const t0 = Date.now();
 
-    const recommendations: Recommendation[] =
-      input.persona === "vineyard"
-        ? [
-            {
-              persona: "vineyard",
-              action: "[stub] Operational mitigation based on dominant driver",
-            },
-          ]
-        : [
-            { persona: "trade", action: "[stub] Allocation / hedge guidance" },
-          ];
+    // Demo mode or no OpenAI key → heuristic fallback.
+    if (isDemoMode || !sponsors.openai) {
+      const data = heuristicFallback(input);
+      return {
+        agent: "extraction_agent",
+        ok: true,
+        durationMs: Date.now() - t0,
+        data,
+        summary: isDemoMode ? "demo · heuristic" : "no openai · heuristic",
+      };
+    }
 
-    return {
-      agent: "extraction_agent",
-      ok: true,
-      durationMs: 0,
-      data: {
+    const schemaText = loadSchemaText();
+    if (!schemaText) {
+      const data = heuristicFallback(input);
+      return {
+        agent: "extraction_agent",
+        ok: true,
+        durationMs: Date.now() - t0,
+        data,
+        summary: "schema missing · heuristic",
+      };
+    }
+
+    try {
+      const client = openaiClient();
+      const userMessage = [
+        `Region id: ${input.regionId}`,
+        `Persona: ${input.persona}`,
+        input.weatherSignal && `Weather signals:\n${input.weatherSignal}`,
+        input.geoSignal && `Geographical / terroir signals:\n${input.geoSignal}`,
+        input.tavilySignal && `Public-web signals:\n${input.tavilySignal}`,
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+
+      const res = await client.chat.completions.create(
+        {
+          model: env.OPENAI_MODEL,
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT_HEAD + schemaText },
+            { role: "user", content: userMessage },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: RESPONSE_JSON_SCHEMA,
+          },
+          temperature: 0.2,
+        },
+        { signal: ctx.signal },
+      );
+
+      const content = res.choices[0]?.message?.content;
+      if (!content) {
+        const data = heuristicFallback(input);
+        return {
+          agent: "extraction_agent",
+          ok: true,
+          durationMs: Date.now() - t0,
+          data,
+          summary: "empty openai response · heuristic",
+        };
+      }
+
+      const parsed = JSON.parse(content) as {
+        score: number;
+        qualityBand: ExtractionOutput["qualityBand"];
+        drivers: RiskDriver[];
+        recommendations: Recommendation[];
+        activeGates: string[];
+        rationale: string;
+      };
+
+      const score = Math.max(0, Math.min(100, Number(parsed.score)));
+      // Coerce persona on recommendations in case the model strayed.
+      const recommendations: Recommendation[] = (parsed.recommendations ?? []).map((r) => ({
+        persona: input.persona,
+        action: r.action,
+        evidence: r.evidence,
+      }));
+
+      const data: ExtractionOutput = {
         score,
-        drivers,
+        qualityBand: parsed.qualityBand,
+        drivers: parsed.drivers,
         recommendations,
-        rationale: `TODO(dev): tier 1 Pioneer chat (gpt-5.5 / wine-tuned) → tier 2 OpenAI structured → tier 3 (this) heuristic. Using ${present.length}/3 upstream signals.`,
-      },
-      summary: `heuristic score ${score}`,
-    };
+        rationale: parsed.rationale ?? "",
+        activeGates: parsed.activeGates,
+      };
+
+      return {
+        agent: "extraction_agent",
+        ok: true,
+        durationMs: Date.now() - t0,
+        data,
+        summary: `${parsed.qualityBand ?? "scored"} · risk=${score}`,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn("[extraction] OpenAI call failed, falling back to heuristic:", message);
+      const data = heuristicFallback(input);
+      return {
+        agent: "extraction_agent",
+        ok: false,
+        durationMs: Date.now() - t0,
+        data,
+        error: message,
+        summary: "openai error · heuristic",
+      };
+    }
   },
 };

@@ -7,9 +7,12 @@ import type { Persona } from "@/lib/wine/types";
 interface Props {
   regionId?: string;
   persona?: Persona;
+  /** Optional preview text from feature_agent; shown as a sample of the
+   *  digest content the subscriber will receive. */
+  digestPreview?: string;
 }
 
-export function SubscribeDialog({ regionId, persona }: Props) {
+export function SubscribeDialog({ regionId, persona, digestPreview }: Props) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
@@ -69,6 +72,17 @@ export function SubscribeDialog({ regionId, persona }: Props) {
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
               {t("subscribe.description")}
             </p>
+
+            {digestPreview && (
+              <div className="mt-5 rounded-sm border bg-muted/40 p-4">
+                <p className="text-[10px] uppercase tracking-luxe text-muted-foreground">
+                  {t("subscribe.preview_label")}
+                </p>
+                <pre className="mt-2 whitespace-pre-wrap font-sans text-xs leading-relaxed text-foreground">
+                  {digestPreview}
+                </pre>
+              </div>
+            )}
 
             {success ? (
               <p className="mt-6 rounded-md bg-emerald-500/15 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
