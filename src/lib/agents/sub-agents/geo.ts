@@ -8,6 +8,7 @@ import {
   findChateauByName,
 } from "@/lib/wine/chateaux";
 import type { SubAgent } from "@/lib/agents/types";
+import type { GeoSnapshot } from "@/lib/wine/types";
 
 export interface GeoInput {
   regionId: string;
@@ -17,13 +18,8 @@ export interface GeoInput {
   chateau?: string;
 }
 
-export interface GeoSignals {
-  summary: string;
-  centroid: { lat: number; lng: number };
-  appellations: string[];
-  /** Free-form notes (elevation, soil, frost-pocket signals, water buffer). */
-  notes: string[];
-}
+/** GeoSignals === client-safe GeoSnapshot, re-exported here for agent-internal use. */
+export type GeoSignals = GeoSnapshot;
 
 /**
  * Resolves terroir context for left-bank Bordeaux from the 61-château

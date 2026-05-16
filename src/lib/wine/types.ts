@@ -44,6 +44,17 @@ export interface AnalyzeInput {
   uploads?: UploadMeta[];
 }
 
+/** Client-safe shape of the geo_agent's structured signals — surfaced on
+ *  both dashboards as a Terroir card. Mirrors GeoSignals from geo.ts but
+ *  defined here so client components can import the type without dragging
+ *  in `"server-only"` modules. */
+export interface GeoSnapshot {
+  summary: string;
+  centroid: { lat: number; lng: number };
+  appellations: string[];
+  notes: string[];
+}
+
 export interface RiskDriver {
   source: "weather" | "geo" | "tavily" | "extraction";
   signal: string;
@@ -92,6 +103,8 @@ export interface AnalyzeResult {
   rationale?: string;
   /** Feature-agent output for dashboard summary / report / subscription. */
   feature?: FeatureSummary | null;
+  /** Geo-agent structured snapshot (elevation / soil / frost-pockets / AOC mix) — drives the Terroir card. */
+  geoSnapshot?: GeoSnapshot | null;
   /** Step-by-step trace shown in the dashboard for transparency. */
   trace: AgentStepTrace[];
   generatedAt: string;

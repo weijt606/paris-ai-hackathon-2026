@@ -187,6 +187,11 @@ export const DICT = {
     fr: "Synthèse",
     en: "Executive summary",
   },
+  "terroir.title": {
+    zh: "风土快照",
+    fr: "Terroir",
+    en: "Terroir snapshot",
+  },
   "feature.report.download": {
     zh: "下载报告",
     fr: "Télécharger le rapport",

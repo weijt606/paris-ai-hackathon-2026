@@ -123,6 +123,7 @@ export function demoWineAnalysis(input: AnalyzeInput): AnalyzeResult {
     rationale:
       "Demo-mode placeholder: weighted base from sub-agent stubs, gated by spring-frost signal and softening market sentiment.",
     feature: demoFeature(input, score),
+    geoSnapshot: demoGeoSignals(input.region.id),
     generatedAt: new Date().toISOString(),
     isDemoOrPartial: true,
   };
