@@ -98,28 +98,27 @@ export function useAnalysisFlow() {
         tavily_agent: detailOf("tavily_agent"),
       }));
 
-      // Phase 3 — extraction + Pioneer (tool call) run concurrently
+      // Phase 3 — extraction runs alone (no Pioneer here; Pioneer serves feature now)
       await sleep(240);
-      setWorkflowState((s) => ({
-        ...s,
-        extraction_agent: "running",
-        pioneer: "running",
-      }));
+      setWorkflowState((s) => ({ ...s, extraction_agent: "running" }));
 
-      // Pioneer responds first (classifier is fast)
-      await sleep(380);
-      setWorkflowState((s) => ({ ...s, pioneer: "ok" }));
-
-      // Extraction concludes using pioneer's output + sub-agent signals
-      await sleep(180);
+      await sleep(560);
       setWorkflowState((s) => ({ ...s, extraction_agent: setSub("extraction_agent") }));
       setDetails((d) => ({ ...d, extraction_agent: detailOf("extraction_agent") }));
 
-      // Phase 4 — feature agent
+      // Phase 4 — feature + Pioneer (tool call) run concurrently
       await sleep(220);
-      setWorkflowState((s) => ({ ...s, feature_agent: "running" }));
+      setWorkflowState((s) => ({
+        ...s,
+        feature_agent: "running",
+        pioneer: "running",
+      }));
 
+      // Pioneer (Qwen / GLM / Llama-class) responds first — it's the inner LLM
       await sleep(360);
+      setWorkflowState((s) => ({ ...s, pioneer: "ok" }));
+
+      await sleep(140);
       setWorkflowState((s) => ({ ...s, feature_agent: setSub("feature_agent") }));
       setDetails((d) => ({ ...d, feature_agent: detailOf("feature_agent") }));
 

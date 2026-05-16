@@ -100,6 +100,7 @@ export async function analyze(
     region: input.region,
     timeframe: input.timeframe,
     persona: input.persona,
+    uploads: input.uploads,
     signal: opts.signal ?? new AbortController().signal,
   };
 
