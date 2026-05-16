@@ -145,8 +145,10 @@ export function DriverDonutChart({ drivers }: { drivers: RiskDriver[] }) {
             label={renderCallout}
             labelLine={false}
           >
-            {data.map((d) => (
-              <Cell key={d.name} fill={d.fill} />
+            {data.map((d, i) => (
+              // Drivers may share a `source` (e.g. two "weather" entries),
+              // so name alone is not unique — composite key keeps React happy.
+              <Cell key={`${d.name}-${i}`} fill={d.fill} />
             ))}
           </Pie>
           <Tooltip
