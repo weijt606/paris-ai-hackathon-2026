@@ -5,33 +5,37 @@ This file is loaded into every Claude Code session in this repo.
 ## Project context
 
 - **Event:** Paris AI Hackathon 2026 — single-day sprint hosted by {Tech: Europe} + Hexa
-- **Format:** ~7h coding window (10:45 → 17:30), Live demo at 18:00, max 80 attendees
-- **Sponsors with credits:** OpenAI, Anthropic, Fal (image/video), Gradium (TTS/STT), Slng.ai (voice infra)
-- **Repo visibility:** Shared with teammates AND hackathon organizers — never commit secrets or PII
-- **Goal of this scaffold:** Pre-wire infrastructure so the 7h sprint is pure product work, not boilerplate
+- **Format:** ~7h coding window (10:45 → 17:30), Live demo at 18:00
+- **Chosen product:** Wine intelligence — risk + market signals for Burgundy & Bordeaux, dual persona (vineyard | trade).
+- **Architecture:** Orchestrator agent (Claude tool-use loop) → weather/geo/tavily sub-agents → extraction_agent → dashboard. Optional pioneer.ai post-training feedback loop.
+- **Repo visibility:** Shared with teammates AND hackathon organizers — never commit secrets or PII.
+- **Collab doc:** [`docs/AGENTS.zh.md`](docs/AGENTS.zh.md) — assignments, contracts, recipes (Chinese).
 
 ## Stack
 
 - Next.js 15 (App Router) + React 19 + TypeScript (strict)
-- Tailwind v3 + shadcn-style primitives
-- Vercel AI SDK + direct SDKs for each sponsor (env-gated adapters under `src/lib/`)
-- Drizzle + better-sqlite3 (local-first DB; cloud DB only if a feature needs it)
+- Tailwind v3
+- `@anthropic-ai/sdk` (Claude tool-use orchestrator)
+- `zod` for env + API validation
 - pnpm (`>=10`), node `>=20`
+
+No DB, no Vercel AI SDK, no shadcn — kept tight to what the agents actually need.
 
 ## Sprint-day workflow
 
 Pre-event:
-1. `pnpm install` (do this BEFORE the event — don't waste sprint time on dependency resolution)
-2. `cp .env.example .env.local` and fill in sponsor keys received from organizers
-3. `pnpm check:env` to verify each key actually works — don't trust "key present"; verify it pings
-4. `pnpm dev` and confirm `/api/health` shows all sponsors `configured: true`
-5. Set `NEXT_PUBLIC_DEMO_MODE=true` and re-test end-to-end on fixtures alone — this is the rehearsal fallback
+1. `pnpm install`
+2. `cp .env.example .env.local`, fill `ANTHROPIC_API_KEY` (required) + `TAVILY_API_KEY` (optional) + `PIONEER_API_KEY` (when owner provides)
+3. `pnpm check:env` to verify Anthropic actually pings
+4. `pnpm dev` and confirm `/api/health` returns 200
+5. Set `NEXT_PUBLIC_DEMO_MODE=true` and re-test `/api/analyze` end-to-end on fixtures — this is the rehearsal fallback
 
 On the day:
-1. Confirm track at 10:45 → copy `src/app/(track)/_template/` to `src/app/(track)/<your-track>/`
-2. Build core loop inside that folder; use adapters from `src/lib/`, do not call sponsor SDKs directly elsewhere
-3. Feature freeze at T-1h before submission. Switch to demo-mode rehearsal.
-4. Live demo at 18:00 — practice the script ≥3 times.
+1. Each sub-agent owner pulls latest, branches `agent/<name>`, replaces stub body in `src/lib/agents/sub-agents/<name>.ts`
+2. Honor the SubAgent contract — orchestrator + types are off-limits
+3. Add a demo fixture branch for every new external call (H3)
+4. Feature freeze at T-1h before submission. Switch to demo-mode rehearsal.
+5. Live demo at 18:00 — practice the script ≥3 times.
 
 ## Project rules
 
@@ -106,9 +110,10 @@ This repo is shared with hackathon organizers. Never commit:
 - Internal-team document links
 Run `git diff --cached` and scan for tokens before committing. If unsure, ask.
 
-### Rule H2 — Sponsor adapters are gated
-Every sponsor call must go through `src/lib/{ai,media,voice}/`. Missing keys must return 503,
-not crash. Rate limits and outages happen during demos — assume the worst.
+### Rule H2 — Adapters are gated
+Every external API call must go through `src/lib/{ai,training}/` or a sub-agent under
+`src/lib/agents/sub-agents/`. Missing keys must return 503 or degrade to a stub —
+never crash. Rate limits and outages happen during demos — assume the worst.
 
 ### Rule H3 — Demo mode is sacred
 `NEXT_PUBLIC_DEMO_MODE=true` must always produce a functional end-to-end flow against

@@ -1,8 +1,7 @@
 #!/usr/bin/env tsx
 /**
- * Pre-flight check — run before the hackathon to verify every sponsor key
- * actually works (not just present). Catches the "preview API rate-limited
- * mid-demo" class of bug.
+ * Pre-flight env check — verify the orchestrator brain + integrations.
+ * Run before a demo to catch "key present but rate-limited / wrong tier".
  *
  * Usage:
  *   pnpm check:env
@@ -17,24 +16,11 @@ interface Check {
 
 const checks: Check[] = [
   {
-    name: "OpenAI",
-    required: false,
-    run: async () => {
-      if (!process.env.OPENAI_API_KEY) return { ok: false, detail: "OPENAI_API_KEY not set" };
-      const res = await fetch("https://api.openai.com/v1/models", {
-        headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-      });
-      return res.ok
-        ? { ok: true, detail: `${res.status} OK` }
-        : { ok: false, detail: `${res.status} ${await res.text()}` };
-    },
-  },
-  {
     name: "Anthropic",
-    required: false,
+    required: true,
     run: async () => {
       if (!process.env.ANTHROPIC_API_KEY)
-        return { ok: false, detail: "ANTHROPIC_API_KEY not set" };
+        return { ok: false, detail: "ANTHROPIC_API_KEY not set (orchestrator brain)" };
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
@@ -54,28 +40,19 @@ const checks: Check[] = [
     },
   },
   {
-    name: "Fal",
+    name: "Tavily",
     required: false,
     run: async () => {
-      if (!process.env.FAL_KEY) return { ok: false, detail: "FAL_KEY not set" };
-      return { ok: true, detail: "key present (no cheap ping endpoint — verify by generating)" };
+      if (!process.env.TAVILY_API_KEY) return { ok: false, detail: "TAVILY_API_KEY not set" };
+      return { ok: true, detail: "key present (verify on first tavily_agent call)" };
     },
   },
   {
-    name: "Gradium",
+    name: "Pioneer.ai",
     required: false,
     run: async () => {
-      if (!process.env.GRADIUM_API_KEY)
-        return { ok: false, detail: "GRADIUM_API_KEY not set" };
-      return { ok: true, detail: "key present (no public ping endpoint documented)" };
-    },
-  },
-  {
-    name: "Slng.ai",
-    required: false,
-    run: async () => {
-      if (!process.env.SLNG_API_KEY) return { ok: false, detail: "SLNG_API_KEY not set" };
-      return { ok: true, detail: "key present (no public ping endpoint documented)" };
+      if (!process.env.PIONEER_API_KEY) return { ok: false, detail: "PIONEER_API_KEY not set" };
+      return { ok: true, detail: "key present (adapter stub — verify once docs land)" };
     },
   },
 ];
@@ -90,7 +67,9 @@ const checks: Check[] = [
       console.log(`${mark} ${c.name.padEnd(12)} ${res.detail ?? ""}`);
       if (!res.ok && c.required) failures++;
     } catch (err) {
-      console.log(`\x1b[31m✗\x1b[0m ${c.name.padEnd(12)} ${err instanceof Error ? err.message : err}`);
+      console.log(
+        `\x1b[31m✗\x1b[0m ${c.name.padEnd(12)} ${err instanceof Error ? err.message : err}`,
+      );
       if (c.required) failures++;
     }
   }

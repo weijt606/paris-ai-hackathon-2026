@@ -1,94 +1,79 @@
-# Paris AI Hackathon 2026
+# 🍇 Wine Signals — Paris AI Hackathon 2026
 
-Team scaffold for the Paris AI Hackathon — single-day sprint, ~7h coding window, live demo at 18:00.
+Multi-agent risk + market intelligence for French wine regions (Burgundy & Bordeaux). Built for the Paris AI Hackathon 2026.
 
-Sponsor adapters are pre-wired and env-gated. On event day, copy the track template, build inside it, and ship.
-
-## Stack
-
-- Next.js 15 (App Router) + React 19 + TypeScript (strict)
-- Tailwind CSS v3
-- Vercel AI SDK + direct sponsor SDKs (OpenAI / Anthropic / Fal / Gradium / Slng.ai)
-- Drizzle ORM + better-sqlite3 (local DB; only if your product needs persistence)
-- pnpm
+**Architecture:** Orchestrator (Claude tool-use loop) → weather / geo / tavily sub-agents → extraction_agent → dashboard. Optional pioneer.ai for post-training feedback.
 
 ## Quick start
 
 ```bash
 pnpm install
-cp .env.example .env.local        # fill in any sponsor keys you have
-pnpm check:env                    # verify each key actually pings
-pnpm dev
+cp .env.example .env.local       # fill ANTHROPIC_API_KEY (required)
+pnpm check:env                   # verify Anthropic pings
+pnpm dev                         # → http://localhost:3000
 ```
 
-Open <http://localhost:3000>. The home page shows which sponsors are configured.
+Demo-mode end-to-end (no keys needed):
 
-## What's pre-wired
+```bash
+NEXT_PUBLIC_DEMO_MODE=true pnpm dev
+# → orchestrator returns fixtures from src/lib/demo/fixtures.ts
+```
 
-| Adapter | Path | Demo route |
-|---|---|---|
-| OpenAI chat | `src/lib/ai/openai.ts` | `POST /api/chat` (provider=openai) |
-| Anthropic chat | `src/lib/ai/anthropic.ts` | `POST /api/chat` (provider=anthropic) |
-| Provider-agnostic chat with auto-fallback | `src/lib/ai/index.ts` | `POST /api/chat` |
-| Fal image gen | `src/lib/media/fal.ts` | `POST /api/image` |
-| Gradium STT | `src/lib/voice/gradium.ts` | `POST /api/stt` (multipart audio) |
-| Gradium TTS | `src/lib/voice/gradium.ts` | `POST /api/tts` |
-| Slng.ai voice agent (REST stub) | `src/lib/voice/slng.ts` | — |
-
-Adapters all share the same contract: missing env key → throw `SponsorUnavailableError` → API returns `503` with which sponsor is missing.
-
-## Demo mode
-
-Set `NEXT_PUBLIC_DEMO_MODE=true` and every sponsor call returns deterministic fixtures from `src/lib/demo/fixtures.ts`. Use this to rehearse the live demo without burning credits.
-
-## Event-day flow
-
-1. **10:45** — Confirm chosen track. Copy the template:
-   ```bash
-   cp -r src/app/\(track\)/template src/app/\(track\)/<your-track>
-   ```
-2. **11:15 → 15:30** — Build inside `src/app/(track)/<your-track>/`. Always import from `src/lib/*`, never call sponsor SDKs directly from components.
-3. **15:30 → 16:30** — UI polish, add fixtures for every new sponsor call, set `DEMO_MODE=true`, rehearse.
-4. **16:30 → 17:30** — Live-demo rehearsal × 3. Feature freeze.
-5. **17:30** — Submit. **18:00** — Live demo.
-
-## Repo layout
+## Project layout
 
 ```
 src/
 ├── app/
-│   ├── api/{chat,image,stt,tts,health}/route.ts   # sponsor-backed HTTP routes
-│   ├── (track)/template/                           # copy on event day
-│   ├── layout.tsx · page.tsx · globals.css
-├── components/voice/MicCapture.tsx                 # browser mic → /api/stt
+│   ├── api/
+│   │   ├── analyze/route.ts       # POST → orchestrator
+│   │   └── health/route.ts
+│   ├── scaffold/page.tsx          # provider/integration status
+│   ├── page.tsx                   # wine dashboard
+│   ├── layout.tsx · globals.css
+├── components/wine/               # dashboard UI
+│   ├── AnalyzePanel.tsx           # parent: state + fetch
+│   ├── PersonaToggle.tsx          # vineyard | trade
+│   ├── RegionPicker.tsx           # Burgundy / Bordeaux
+│   ├── RiskCard.tsx               # score, drivers, recommendations
+│   └── SignalsList.tsx            # agent trace
 ├── lib/
-│   ├── env.ts · env.public.ts                      # zod-validated env, sponsor presence flags
-│   ├── ai/{openai,anthropic,index}.ts              # LLM adapters + fallback router
-│   ├── media/fal.ts                                # image/video gen
-│   ├── voice/{gradium,slng}.ts                     # voice adapters
-│   ├── db/{index,schema}.ts                        # Drizzle + sqlite (optional)
-│   ├── demo/fixtures.ts                            # demo-mode responses
-│   └── utils.ts                                    # cn(), SponsorUnavailableError
-docs/                                               # ARCHITECTURE, SPONSORS, DEMO_PLAYBOOK, TRACK_PIVOT_KIT
-scripts/check-env.ts                                # pre-flight key check
+│   ├── agents/                    # ← agent framework
+│   │   ├── orchestrator.ts        # Claude tool-use loop (routing layer)
+│   │   ├── types.ts               # SubAgent contract, runAgentSafely
+│   │   ├── extraction.ts          # risk evaluator (heuristic stub)
+│   │   ├── feature.ts             # feature layer (TBD)
+│   │   └── sub-agents/
+│   │       ├── weather.ts         # climate + forecast (stub)
+│   │       ├── geo.ts             # terroir + appellation (stub)
+│   │       └── tavily.ts          # public-web grounding (stub)
+│   ├── ai/anthropic.ts            # lazy Anthropic client (used by orchestrator)
+│   ├── training/pioneer.ts        # post-training adapter (stub)
+│   ├── wine/                      # domain
+│   │   ├── types.ts               # AnalyzeInput, AnalyzeResult, etc.
+│   │   └── regions.ts             # static Burgundy + Bordeaux list
+│   ├── demo/fixtures.ts           # demo-mode AnalyzeResult
+│   ├── env.ts                     # zod-validated env
+│   └── utils.ts                   # cn() + SponsorUnavailableError
+docs/AGENTS.zh.md                  # collab guide (Chinese)
+scripts/check-env.ts               # pre-flight key check
+CLAUDE.md                          # project rules (loaded into every AI session)
 ```
+
+## API contract
+
+`POST /api/analyze` — see [`docs/AGENTS.zh.md` §8](docs/AGENTS.zh.md) for the full request/response shape. Demo-mode and missing-key fallbacks return `isDemoOrPartial: true` so the UI can flag degraded results.
+
+## For collaborators
+
+Read [`docs/AGENTS.zh.md`](docs/AGENTS.zh.md) first — it lays out who owns which sub-agent, the SubAgent contract, the 4-step recipe to replace a stub, and the PR checklist.
 
 ## Conventions
 
-- Strict TypeScript, no `any`. `noUncheckedIndexedAccess` is on.
+- Strict TypeScript, no `any`, `noUncheckedIndexedAccess` on.
 - Server-only modules import `"server-only"` at the top.
-- Every sponsor adapter: lazy client init, env-gated, demo-mode branch.
-- Never commit `.env*` (only `.env.example`). Never commit personal info or internal links.
-- Plain commit messages. No AI co-author trailer.
-
-## Docs
-
-- [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — **Start here if you're a teammate.** Mental model, recipes, parallel-work rules, debug guide.
-- [`docs/IDEAS.md`](docs/IDEAS.md) — Shared ideas board. Drop your concepts here before we decide on event day.
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — Why this shape, what's intentionally absent
-- [`docs/SPONSORS.md`](docs/SPONSORS.md) — Per-sponsor integration notes + gotchas
-- [`docs/DEMO_PLAYBOOK.md`](docs/DEMO_PLAYBOOK.md) — Live-demo dos and don'ts
-- [`docs/TRACK_PIVOT_KIT.md`](docs/TRACK_PIVOT_KIT.md) — How to fork the template on event day
+- Every sub-agent: env-gated, demo-mode aware, lazy client init.
+- Never commit `.env*` (only `.env.example`). Plain commits, no AI co-author trailer.
 
 ## License
 
