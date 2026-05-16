@@ -124,9 +124,14 @@ interface Props {
    * to represent the direct entry path (bypassing GPT routing).
    */
   hasUploads?: boolean;
+  /**
+   * When true, hide the bottom per-agent detail list. The DAG alone fits
+   * vertically — useful when the surrounding hero already surfaces status.
+   */
+  compact?: boolean;
 }
 
-export function WorkflowTrace({ state, details, hasUploads = false }: Props) {
+export function WorkflowTrace({ state, details, hasUploads = false, compact = false }: Props) {
   const t = useT();
 
   const doneCount = (Object.values(state) as AgentState[]).filter(
@@ -139,12 +144,10 @@ export function WorkflowTrace({ state, details, hasUploads = false }: Props) {
   );
 
   return (
-    <section className="rounded-md border bg-card p-5">
+    <section className="card-sm p-5">
       <header className="mb-4 flex items-baseline justify-between gap-3">
-        <span className="text-[10px] uppercase tracking-luxe text-muted-foreground">
-          {t("workflow.title")}
-        </span>
-        <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+        <span className="kicker">{t("workflow.title")}</span>
+        <span className="font-mono tabular kicker">
           {doneCount}/{total}
           {totalMs > 0 && ` · ${totalMs}ms`}
         </span>
@@ -292,6 +295,7 @@ export function WorkflowTrace({ state, details, hasUploads = false }: Props) {
 
       {/* Step details — two-line per item so long summaries and 5-digit
           durations don't fight for horizontal space. */}
+      {!compact && (
       <ul className="mt-5 space-y-3 text-[11px]">
         {(
           [
@@ -316,17 +320,15 @@ export function WorkflowTrace({ state, details, hasUploads = false }: Props) {
             <li key={key} className="space-y-1">
               <div className="flex items-baseline gap-2">
                 <Dot state={s} />
-                <span className="text-[10px] uppercase tracking-luxe text-muted-foreground">
-                  {node.label}
-                </span>
-                <span className="ml-auto font-mono text-[10px] tabular-nums text-muted-foreground">
+                <span className="kicker">{node.label}</span>
+                <span className="ml-auto font-mono tabular kicker">
                   {d?.durationMs !== undefined ? `${d.durationMs}ms` : ""}
                 </span>
               </div>
               <p
                 className={cn(
                   "pl-4 break-words text-[11px] leading-relaxed",
-                  s === "fail" ? "text-destructive" : "text-muted-foreground",
+                  s === "fail" ? "text-destructive" : "text-soft",
                   s === "running" && "italic",
                 )}
               >
@@ -336,6 +338,7 @@ export function WorkflowTrace({ state, details, hasUploads = false }: Props) {
           );
         })}
       </ul>
+      )}
     </section>
   );
 }

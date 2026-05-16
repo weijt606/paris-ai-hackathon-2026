@@ -37,11 +37,7 @@ const FAQ: QA[] = [
   },
   {
     q: "Why both an OpenAI extraction and a Pioneer feature agent?",
-    a: "extraction emits strict JSON against a 5K-token schema — a deterministic structured-output task. We use OpenAI gpt-4o-mini for it (recommended over reasoning models like gpt-5* / o-series, which would take 20-40s per call without quality gain). feature is short-form packaging (2-sentence summary, 250-word report, 5-line digest) where a Pioneer-hosted 7-8B open-source model (Qwen / Llama / GLM class) is sufficient, cheaper, and bakes a path for domain fine-tuning. Pioneer is the preferred tier; OpenAI is the tier-2 fallback; a deterministic template is tier-3 so the dashboard never blanks.",
-  },
-  {
-    q: "Which OpenAI model should OPENAI_MODEL point to?",
-    a: "gpt-4o-mini. The orchestrator + extraction + backtest tasks are 'follow the schema, emit JSON' — no chain-of-thought reasoning required. gpt-4o-mini does each call in 3-6s; reasoning models (gpt-5*, o-series) do 20-40s of internal thinking with no quality improvement on these structured tasks, and they reject custom temperature. The orchestrator-level result cache absorbs repeat runs, so first-call latency is the actual demo bottleneck — that's where the model choice matters.",
+    a: "extraction needs to reason against a 5K-token schema and emit strict JSON with bounded fields — well-suited to a larger reasoning-capable model. feature is short-form packaging (2-sentence summary, 250-word report, 5-line digest) where a smaller, faster open-source model (Pioneer-hosted Qwen / Llama / GLM 7-8B class) is sufficient and cheaper. Pioneer is the preferred tier; OpenAI is the tier-2 fallback; a deterministic template is tier-3 so the dashboard never blanks.",
   },
   {
     q: "What's backtest mode?",
@@ -86,22 +82,10 @@ const STAGES: StageBox[] = [
     source: "src/lib/agents/orchestrator.ts",
   },
   {
-    index: "3a",
-    title: "weather_agent — climate signals",
-    body: "Reads DEM-downscaled ERA5 (1990–2024 historicals) plus the ECMWF SEAS5 ensemble (2026 seasonal forecast) from bundled CSVs. Returns GST, harvest rain, heat-stress days, frost days, winter rain, diurnal range, and derived Huglin / cool-night indices. Pass a château name for a single-site read; coverage is the 61 left-bank 1855-classed growths.",
-    source: "src/lib/agents/sub-agents/weather.ts · src/lib/wine/climate.ts",
-  },
-  {
-    index: "3b",
-    title: "geo_agent — terroir context",
-    body: "Joins three bundled CSVs (chateaux geocodes / static_geo features / microtopo TPI) on château name. Returns elevation, distance to Gironde + Atlantic, TPI cold-air-pooling signal, slope + aspect, soil clay/sand/silt %, and AOC mix per region. Drives the Terroir card and explains the 'why' behind weather signals.",
-    source: "src/lib/agents/sub-agents/geo.ts · src/lib/wine/chateaux.ts",
-  },
-  {
-    index: "3c",
-    title: "tavily_agent — public-web grounding",
-    body: "Bordeaux-focused harness across five source channels (sentiment / policy / regulation / winemaker / market) with trusted-domain weighting (INAO, agriculture.gouv.fr, Decanter, Jancis Robinson, Wine-Searcher…), URL dedupe, and quality filter. A SQLite cache (node:sqlite, 7-day TTL) survives across requests so repeat queries hit local storage instead of the Tavily API.",
-    source: "src/lib/agents/sub-agents/tavily.ts · src/lib/agents/sub-agents/tavily-cache.ts",
+    index: "3",
+    title: "Sub-agents (parallel)",
+    body: "weather (ERA5 + SEAS5), geo (61-château 1855 dataset), tavily (5-channel Bordeaux harness with SQLite cache).",
+    source: "src/lib/agents/sub-agents/{weather,geo,tavily}.ts",
   },
   {
     index: "4",
@@ -133,13 +117,13 @@ export default function BlogPage() {
   return (
     <main className="container mx-auto max-w-3xl px-6 py-16">
       <header className="mb-12">
-        <p className="text-[10px] uppercase tracking-luxe text-muted-foreground">
+        <p className="kicker">
           Wine Signals · Engineering blog
         </p>
         <h1 className="mt-3 font-serif text-4xl font-medium leading-tight tracking-tight md:text-5xl">
           How Wine Signals works
         </h1>
-        <p className="mt-4 max-w-prose text-sm leading-relaxed text-muted-foreground">
+        <p className="mt-4 max-w-prose text-sm leading-relaxed text-soft">
           A multi-agent pipeline that turns climate, terroir, and market signals into a
           vintage-quality forecast for Burgundy &amp; Bordeaux. This page walks through the
           architecture and answers the questions we get most often.
@@ -152,20 +136,49 @@ export default function BlogPage() {
           {STAGES.map((s) => (
             <li
               key={s.index}
-              className="grid gap-3 rounded-md border bg-card p-5 md:grid-cols-[32px_1fr]"
+              className="card-lg grid gap-3 p-5 md:grid-cols-[32px_1fr]"
             >
-              <span className="font-mono text-sm tabular-nums text-muted-foreground">
+              <span className="tabular font-mono text-sm text-soft">
                 {s.index}
               </span>
               <div className="min-w-0">
                 <p className="font-medium">{s.title}</p>
-                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
-                <p className="mt-2 font-mono text-[10px] text-muted-foreground">{s.source}</p>
+                <p className="mt-1 text-sm leading-relaxed text-soft">{s.body}</p>
+                <p className="kicker mt-2 font-mono">{s.source}</p>
               </div>
             </li>
           ))}
         </ol>
 
+        <pre className="mt-8 overflow-x-auto card-lg p-5 text-[10px] leading-relaxed text-soft">
+{`POST /api/analyze
+        │
+        ▼
+   ┌─────────────┐
+   │ ORCHESTRATOR│  OpenAI tool-use loop
+   └─┬─────┬─────┘
+     │     │     │
+  ┌──▼┐ ┌──▼┐ ┌──▼┐
+  │WTH│ │GEO│ │TAV│   parallel
+  └──┬┘ └──┬┘ └──┬┘
+     └─────┼─────┘
+           ▼
+     ┌──────────┐  ╌╌╌╌╌  ┌────────┐
+     │EXTRACTION│         │ Schema │
+     └────┬─────┘         │ 28×6×11│
+          ▼               └────────┘
+     ┌──────────┐  ╌╌╌╌╌  ┌────────┐
+     │ FEATURE  │ ───tool ▶│PIONEER │
+     └────┬─────┘         └────────┘
+          ▼  (isBacktest only)
+     ┌──────────┐
+     │ BACKTEST │ ─ Tavily critic retrieval
+     └────┬─────┘
+          ▼
+     ┌──────────┐
+     │ DASHBOARD│
+     └──────────┘`}
+        </pre>
       </section>
 
       <section className="mb-12">
@@ -174,22 +187,22 @@ export default function BlogPage() {
           {FAQ.map((qa, i) => (
             <details
               key={i}
-              className="group rounded-md border bg-card p-5 open:bg-muted/30"
+              className="group card-lg p-5 open:bg-surface-2"
             >
               <summary className="cursor-pointer list-none font-medium text-foreground">
-                <span className="mr-3 font-mono text-xs tabular-nums text-muted-foreground">
+                <span className="tabular mr-3 font-mono text-xs text-soft">
                   {String(i + 1).padStart(2, "0")}
                 </span>
                 {qa.q}
               </summary>
-              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{qa.a}</p>
+              <p className="mt-3 text-sm leading-relaxed text-soft">{qa.a}</p>
             </details>
           ))}
         </div>
       </section>
 
-      <nav className="border-t pt-8 text-[11px] uppercase tracking-luxe">
-        <ul className="flex flex-wrap gap-6 text-muted-foreground">
+      <nav className="border-t border-line pt-8">
+        <ul className="kicker flex flex-wrap gap-6">
           <li>
             <Link href="/" className="hover:text-foreground">
               Home

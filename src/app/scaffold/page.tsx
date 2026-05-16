@@ -11,9 +11,9 @@ export default function ScaffoldPage() {
   return (
     <main className="container mx-auto max-w-4xl px-6 py-16">
       <header className="mb-12">
-        <p className="text-sm uppercase tracking-widest text-muted-foreground">Config status</p>
+        <p className="kicker">Config status</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight">Sponsors & integrations</h1>
-        <p className="mt-3 text-muted-foreground">
+        <p className="mt-3 text-soft">
           Env-gated. Drop a key into <code>.env.local</code> to enable.
         </p>
         {isDemoMode && (
@@ -25,7 +25,7 @@ export default function ScaffoldPage() {
       </header>
 
       <section className="mb-10">
-        <h2 className="mb-4 text-xl font-semibold">Sponsors</h2>
+        <h2 className="section-kicker mb-4">Sponsors</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           {PROVIDER_INFO.map((s) => (
             <Card key={s.key} name={s.name} role={s.role} on={sponsors[s.key]} />
@@ -34,7 +34,7 @@ export default function ScaffoldPage() {
       </section>
 
       <section>
-        <h2 className="mb-4 text-xl font-semibold">Quick links</h2>
+        <h2 className="section-kicker mb-4">Quick links</h2>
         <ul className="space-y-2 text-sm">
           <li>
             <Link className="underline-offset-4 hover:underline" href="/">
@@ -54,16 +54,16 @@ export default function ScaffoldPage() {
 
 function Card({ name, role, on }: { name: string; role: string; on: boolean }) {
   return (
-    <div className="flex items-start justify-between rounded-lg border p-4">
+    <div className="card-sm flex items-start justify-between p-4">
       <div>
         <p className="font-medium">{name}</p>
-        <p className="text-sm text-muted-foreground">{role}</p>
+        <p className="text-sm text-soft">{role}</p>
       </div>
       <span
         className={
           on
-            ? "rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300"
-            : "rounded-full bg-zinc-500/15 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:text-zinc-300"
+            ? "chip bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+            : "chip bg-zinc-500/15 text-zinc-700 dark:text-zinc-300"
         }
       >
         {on ? "configured" : "not set"}

@@ -36,17 +36,10 @@ export function UploadArea({ uploads, onChange }: Props) {
   }
 
   return (
-    <div className="flex h-full flex-col gap-2">
-      <div className="flex items-baseline justify-between">
-        <span className="text-[10px] uppercase tracking-luxe text-muted-foreground">
-          {t("vineyard.upload.title")}
-        </span>
-        {uploads.length > 0 && (
-          <span className="text-[10px] uppercase tracking-luxe text-emerald-700 dark:text-emerald-300">
-            ✓ {t("vineyard.upload.context_badge", { n: uploads.length })}
-          </span>
-        )}
-      </div>
+    <div className="rounded-card border border-line p-4">
+      <h3 className="kicker">
+        {t("vineyard.upload.title")}
+      </h3>
       <div
         onClick={() => inputRef.current?.click()}
         onDragOver={(e) => {
@@ -60,13 +53,11 @@ export function UploadArea({ uploads, onChange }: Props) {
           addFiles(e.dataTransfer.files);
         }}
         className={cn(
-          "flex flex-1 cursor-pointer items-center justify-center rounded-sm border border-dashed px-4 py-5 text-center text-xs transition",
-          dragging
-            ? "border-foreground bg-muted/50"
-            : "border-border text-muted-foreground hover:border-foreground/40 hover:bg-muted/30",
+          "mt-3 cursor-pointer rounded-lg border-2 border-dashed p-6 text-center text-sm transition",
+          dragging ? "border-foreground bg-surface-2" : "border-line hover:bg-surface-1",
         )}
       >
-        <span>{t("vineyard.upload.hint")}</span>
+        <p className="text-soft">{t("vineyard.upload.hint")}</p>
         <input
           ref={inputRef}
           type="file"
@@ -79,28 +70,35 @@ export function UploadArea({ uploads, onChange }: Props) {
           }}
         />
       </div>
-      {uploads.length > 0 && (
-        <ul className="space-y-1">
-          {uploads.map((u, i) => (
-            <li
-              key={`${u.name}-${i}`}
-              className="flex items-center gap-2 rounded-sm border bg-background px-3 py-1.5 text-xs"
-            >
-              <span className="flex-1 truncate">{u.name}</span>
-              <span className="font-mono text-[10px] text-muted-foreground">
-                {(u.size / 1024).toFixed(1)} KB
-              </span>
-              <button
-                type="button"
-                onClick={() => remove(i)}
-                className="ml-1 text-muted-foreground hover:text-destructive"
-                aria-label={t("vineyard.upload.remove")}
+      {uploads.length === 0 ? (
+        <p className="mt-3 text-xs text-soft">{t("vineyard.upload.empty")}</p>
+      ) : (
+        <>
+          <ul className="mt-3 space-y-1">
+            {uploads.map((u, i) => (
+              <li
+                key={`${u.name}-${i}`}
+                className="flex items-center gap-2 rounded-md border border-line bg-surface-1 px-3 py-2 text-xs"
               >
-                ×
-              </button>
-            </li>
-          ))}
-        </ul>
+                <span className="flex-1 truncate">{u.name}</span>
+                <span className="tabular font-mono text-soft">
+                  {(u.size / 1024).toFixed(1)} KB
+                </span>
+                <button
+                  type="button"
+                  onClick={() => remove(i)}
+                  className="ml-1 text-soft hover:text-red-400"
+                  aria-label={t("vineyard.upload.remove")}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 rounded-md bg-emerald-500/15 px-2 py-1 text-xs text-emerald-300">
+            ✓ {t("vineyard.upload.context_badge", { n: uploads.length })}
+          </p>
+        </>
       )}
     </div>
   );

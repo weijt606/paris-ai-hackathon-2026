@@ -1,32 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { useT } from "@/lib/i18n/Provider";
-import { BacktestCard } from "@/components/wine/BacktestCard";
-import { ExecutiveSummary } from "@/components/wine/ExecutiveSummary";
-import { FullReportCard } from "@/components/wine/FullReportCard";
-import { RegionPicker } from "@/components/wine/RegionPicker";
-import { RiskCard } from "@/components/wine/RiskCard";
-import { TerroirCard } from "@/components/wine/TerroirCard";
-import { UploadArea } from "@/components/wine/vineyard/UploadArea";
-import { DriverDonutChart } from "@/components/wine/charts/DriverDonutChart";
-import { WeatherLineChart } from "@/components/wine/charts/WeatherLineChart";
-import { ExportButton } from "@/components/wine/shared/ExportButton";
-import { SubscribeDialog } from "@/components/wine/shared/SubscribeDialog";
-import { TimeframePicker } from "@/components/wine/shared/TimeframePicker";
-import { RunOverlay } from "@/components/wine/shared/RunOverlay";
+import { AtlasShell } from "@/components/wine/atlas/AtlasShell";
+import { VineyardSidebar } from "@/components/wine/atlas/VineyardSidebar";
+import { VineyardControls } from "@/components/wine/atlas/VineyardControls";
+import { AnalysisDrawer } from "@/components/wine/atlas/AnalysisDrawer";
+import { WorkflowHero } from "@/components/wine/atlas/WorkflowHero";
 import { useAnalysisFlow } from "@/lib/hooks/useAnalysisFlow";
 import { REGIONS } from "@/lib/wine/regions";
-import type { AnalyzeInput, Region, Timeframe, UploadMeta } from "@/lib/wine/types";
+import type {
+  AnalyzeInput,
+  Region,
+  Timeframe,
+  UploadMeta,
+} from "@/lib/wine/types";
 
 const BordeauxMap = dynamic(
-  () => import("@/components/wine/trade/BordeauxMap").then((m) => m.BordeauxMap),
+  () =>
+    import("@/components/wine/trade/BordeauxMap").then((m) => m.BordeauxMap),
   {
     ssr: false,
-    loading: () => (
-      <div className="h-[420px] w-full animate-pulse rounded-md border bg-muted/40 md:h-[520px]" />
-    ),
+    loading: () => <div className="h-full w-full bg-surface-1" />,
   },
 );
 
@@ -36,7 +31,6 @@ function defaultTimeframe(): Timeframe {
 }
 
 export function VineyardDashboard() {
-  const t = useT();
   const first = REGIONS[0]!;
   const [region, setRegion] = useState<Pick<Region, "id" | "name" | "parent">>({
     id: first.id,
@@ -47,8 +41,14 @@ export function VineyardDashboard() {
   const [timeframe, setTimeframe] = useState(defaultTimeframe);
   const [question, setQuestion] = useState("");
   const [uploads, setUploads] = useState<UploadMeta[]>([]);
-  const [reportShown, setReportShown] = useState(true);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [reportShown, setReportShown] = useState(false);
   const { workflowState, details, result, loading, error, run } = useAnalysisFlow();
+
+  const flowActive = workflowState.orchestrator !== "pending";
+  useEffect(() => {
+    if (flowActive) setDrawerOpen(true);
+  }, [flowActive]);
 
   function handleRun() {
     setReportShown(false);
@@ -63,125 +63,33 @@ export function VineyardDashboard() {
     void run(body);
   }
 
-  const resultCards: Array<{ id: string; node: React.ReactNode }> = [];
-  if (result) {
-    if (result.feature?.executiveSummary)
-      resultCards.push({
-        id: "executive",
-        node: <ExecutiveSummary text={result.feature.executiveSummary} />,
-      });
-    if (result.backtest)
-      resultCards.push({ id: "backtest", node: <BacktestCard backtest={result.backtest} /> });
-    resultCards.push({ id: "risk", node: <RiskCard result={result} /> });
-    if (result.geoSnapshot)
-      resultCards.push({ id: "terroir", node: <TerroirCard snapshot={result.geoSnapshot} /> });
-    resultCards.push({ id: "drivers", node: <DriverDonutChart drivers={result.drivers} /> });
-    resultCards.push({
-      id: "weather",
-      node: <WeatherLineChart regionId={result.region.id} />,
-    });
-    if (result.feature?.reportMarkdown)
-      resultCards.push({
-        id: "report",
-        node: <FullReportCard markdown={result.feature.reportMarkdown} />,
-      });
-  }
-
   return (
-    <main className="container mx-auto max-w-6xl px-6 py-12">
-      <header className="mb-10 flex flex-wrap items-end justify-between gap-6 border-b pb-8 print:mb-4 animate-fade-in">
-        <div>
-          <p className="text-[10px] uppercase tracking-luxe text-muted-foreground">
-            {t("persona.vineyard")}
-          </p>
-          <h1 className="mt-3 font-serif text-4xl font-medium leading-tight tracking-tight md:text-5xl">
-            {t("vineyard.title")}
-          </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-            {t("vineyard.subtitle")}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 print:hidden">
-          <ExportButton
-            reportMarkdown={result?.feature?.reportMarkdown}
-            filename={`wine-signals-${region.id}.md`}
+    <AtlasShell
+      drawerOpen={drawerOpen}
+      onDrawerClose={() => setDrawerOpen(false)}
+      drawerLabel={
+        result
+          ? `${result.region.name} · Analysis`
+          : loading
+            ? "Agents running"
+            : "Analysis"
+      }
+      drawer={
+        result && reportShown ? (
+          <AnalysisDrawer result={result} persona="vineyard" />
+        ) : flowActive || result ? (
+          <WorkflowHero
+            state={workflowState}
+            details={details}
+            hasUploads={uploads.length > 0}
+            subject={region.name}
+            done={!!result}
+            onContinue={() => setReportShown(true)}
           />
-          <SubscribeDialog
-            regionId={region.id}
-            persona="vineyard"
-            digestPreview={result?.feature?.emailDigest}
-          />
-        </div>
-      </header>
-
-      {/* Controls — top section */}
-      <section className="mb-10 rounded-md border bg-card p-8 print:hidden animate-fade-in-up">
-        <div className="grid gap-6 md:grid-cols-2">
-          <RegionPicker value={region.id} onChange={setRegion} />
-          <TimeframePicker value={timeframe} onChange={setTimeframe} />
-        </div>
-
-        <div className="mt-6 grid items-stretch gap-6 md:grid-cols-2">
-          <label className="flex h-full flex-col gap-2 text-sm">
-            <span className="text-[10px] uppercase tracking-luxe text-muted-foreground">
-              {t("common.question")}
-            </span>
-            <textarea
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              rows={4}
-              placeholder={t("common.question_placeholder")}
-              className="flex-1 resize-none rounded-sm border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-            />
-          </label>
-          <div className="flex h-full flex-col">
-            <UploadArea uploads={uploads} onChange={setUploads} />
-          </div>
-        </div>
-
-        <div className="mt-8 flex flex-col gap-3 border-t pt-6 md:flex-row md:items-center md:justify-between">
-          <div className="min-w-0">
-            {chateau ? (
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] uppercase tracking-luxe text-muted-foreground">
-                  {t("trade.focus_chateau")}
-                </span>
-                <span className="truncate text-sm font-medium">{chateau.name}</span>
-                <span className="text-[10px] text-muted-foreground">{chateau.aoc}</span>
-                <button
-                  type="button"
-                  onClick={() => setChateau(null)}
-                  className="text-[10px] uppercase tracking-luxe text-muted-foreground hover:text-foreground"
-                  aria-label={t("common.clear")}
-                >
-                  ×
-                </button>
-              </div>
-            ) : (
-              <p className="text-[10px] uppercase tracking-luxe text-muted-foreground">
-                {region.name}
-              </p>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={handleRun}
-            disabled={loading}
-            className="h-11 shrink-0 rounded-sm bg-primary px-8 text-[11px] uppercase tracking-luxe text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            {loading ? t("common.running") : t("common.run_analysis")}
-          </button>
-        </div>
-
-        {error && (
-          <div className="mt-4 rounded-sm border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-            {error}
-          </div>
-        )}
-      </section>
-
-      {/* Map — wide */}
-      <section className="mb-12 animate-fade-in-up" style={{ animationDelay: "120ms" }}>
+        ) : null
+      }
+      left={<VineyardSidebar value={region.id} onChange={setRegion} />}
+      center={
         <BordeauxMap
           selectedChateau={chateau?.name ?? null}
           onChateauSelect={(c) => {
@@ -193,38 +101,26 @@ export function VineyardDashboard() {
             }
           }}
         />
-      </section>
-
-      {/* Run-time overlay — stays open in completion state until the user
-          clicks "View report". Hides itself after the click. */}
-      <RunOverlay
-        open={loading || (!!result && !reportShown)}
-        loading={loading}
-        state={workflowState}
-        details={details}
-        onContinue={() => setReportShown(true)}
-      />
-
-      {/* Results — progressive cascade */}
-      {result && reportShown ? (
-        <section className="space-y-8">
-          {resultCards.map((card, i) => (
-            <div
-              key={`${result.generatedAt}-${card.id}`}
-              className="animate-fade-in-up"
-              style={{ animationDelay: `${i * 140}ms` }}
-            >
-              {card.node}
-            </div>
-          ))}
-        </section>
-      ) : (
-        !loading && !result && (
-          <section className="rounded-xl border border-dashed p-12 text-center animate-fade-in">
-            <p className="text-sm text-muted-foreground">{t("vineyard.subtitle")}</p>
-          </section>
-        )
-      )}
-    </main>
+      }
+      right={
+        <VineyardControls
+          region={region}
+          timeframe={timeframe}
+          onTimeframeChange={setTimeframe}
+          uploads={uploads}
+          onUploadsChange={setUploads}
+          question={question}
+          onQuestionChange={setQuestion}
+          onRun={handleRun}
+          loading={loading}
+          error={error}
+          hasResult={!!result}
+          onShowAnalysis={() => {
+            setReportShown(true);
+            setDrawerOpen(true);
+          }}
+        />
+      }
+    />
   );
 }

@@ -59,35 +59,33 @@ export function TimeframePicker({ value, onChange }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-baseline justify-between">
-        <span className="text-[10px] uppercase tracking-luxe text-muted-foreground">
-          {t("common.timeframe")}
-        </span>
-        <div className="inline-flex rounded-sm border bg-background p-0.5 text-[10px]">
-          {(["year", "month", "range"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => changeMode(m)}
-              className={cn(
-                "rounded-[3px] px-2 py-0.5 uppercase tracking-luxe transition",
-                mode === m
-                  ? "bg-foreground text-background"
-                  : "text-muted-foreground hover:bg-muted",
-              )}
-            >
-              {t(`timeframe.mode.${m}` as const)}
-            </button>
-          ))}
-        </div>
+    <div className="space-y-2">
+      <span className="kicker">{t("common.timeframe")}</span>
+
+      <div className="inline-flex w-full rounded-pill border border-line bg-surface-1 p-0.5 text-xs">
+        {(["year", "month", "range"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => changeMode(m)}
+            aria-pressed={mode === m}
+            className={cn(
+              "chip flex-1 transition",
+              mode === m
+                ? "bg-foreground text-background"
+                : "text-soft hover:bg-surface-2",
+            )}
+          >
+            {t(`timeframe.mode.${m}` as const)}
+          </button>
+        ))}
       </div>
 
       {mode === "year" && (
         <select
           value={year}
           onChange={(e) => changeYear(Number(e.target.value))}
-          className="h-10 w-full rounded-sm border bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          className="w-full rounded-md border border-line bg-surface-2 px-3 py-2 text-sm focus:border-line-strong focus:outline-none"
           aria-label={t("timeframe.label.year")}
         >
           {yearOptions.map((y) => (
@@ -103,7 +101,7 @@ export function TimeframePicker({ value, onChange }: Props) {
           <select
             value={year}
             onChange={(e) => changeYear(Number(e.target.value))}
-            className="h-10 rounded-sm border bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            className="rounded-md border border-line bg-surface-2 px-3 py-2 text-sm focus:border-line-strong focus:outline-none"
             aria-label={t("timeframe.label.year")}
           >
             {yearOptions.map((y) => (
@@ -115,7 +113,7 @@ export function TimeframePicker({ value, onChange }: Props) {
           <select
             value={month}
             onChange={(e) => changeMonth(Number(e.target.value))}
-            className="h-10 rounded-sm border bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            className="rounded-md border border-line bg-surface-2 px-3 py-2 text-sm focus:border-line-strong focus:outline-none"
             aria-label={t("timeframe.label.month")}
           >
             {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
@@ -133,18 +131,22 @@ export function TimeframePicker({ value, onChange }: Props) {
             type="date"
             value={value.start}
             onChange={(e) => onChange({ ...value, start: e.target.value })}
-            className="h-10 rounded-sm border bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            className="rounded-md border border-line bg-surface-2 px-3 py-2 text-sm focus:border-line-strong focus:outline-none"
             aria-label={t("common.start_date")}
           />
           <input
             type="date"
             value={value.end}
             onChange={(e) => onChange({ ...value, end: e.target.value })}
-            className="h-10 rounded-sm border bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            className="rounded-md border border-line bg-surface-2 px-3 py-2 text-sm focus:border-line-strong focus:outline-none"
             aria-label={t("common.end_date")}
           />
         </div>
       )}
+
+      <p className="font-mono tabular kicker">
+        {value.start} → {value.end}
+      </p>
     </div>
   );
 }

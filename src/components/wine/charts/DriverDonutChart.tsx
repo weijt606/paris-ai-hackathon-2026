@@ -81,7 +81,7 @@ function renderCallout(props: CalloutProps) {
       <polyline
         points={`${p1x},${p1y} ${p2x},${p2y} ${stubEndX},${p2y}`}
         fill="none"
-        stroke="hsl(var(--muted-foreground))"
+        stroke="hsl(var(--soft))"
         strokeOpacity={0.7}
         strokeWidth={0.6}
       />
@@ -104,7 +104,7 @@ function renderCallout(props: CalloutProps) {
         y={p2y + 7}
         textAnchor={anchor}
         fontSize={9}
-        fill="hsl(var(--muted-foreground))"
+        fill="hsl(var(--soft))"
       >
         {truncate(signal, 32)}
       </text>
@@ -122,8 +122,8 @@ export function DriverDonutChart({ drivers }: { drivers: RiskDriver[] }) {
   }));
 
   return (
-    <figure className="rounded-md border bg-card p-6">
-      <figcaption className="mb-2 text-[10px] uppercase tracking-luxe text-muted-foreground">
+    <figure className="card-lg p-6">
+      <figcaption className="kicker mb-2">
         {t("trade.charts.drivers")}
       </figcaption>
 
@@ -154,8 +154,8 @@ export function DriverDonutChart({ drivers }: { drivers: RiskDriver[] }) {
           <Tooltip
             wrapperStyle={{ outline: "none" }}
             contentStyle={{
-              background: "hsl(var(--background))",
-              border: "1px solid hsl(var(--border))",
+              background: "var(--panel)",
+              border: "1px solid var(--line)",
               borderRadius: 6,
               fontSize: 12,
               padding: "8px 12px",
