@@ -96,7 +96,7 @@ export const weatherAgent: SubAgent<WeatherInput, WeatherSignals> = {
         ok: true,
         durationMs: Date.now() - t0,
         data: {
-          summary: `${region.name}: no per-château climate coverage in dataset (1990-2024 ERA5 + 2026 SEAS5 limited to left-bank Bordeaux 1855 classed growths).`,
+          summary: `${region.name}: no per-château climate coverage in dataset (1990-2025 ERA5/NASA-POWER + 2026 SEAS5 limited to left-bank Bordeaux 1855 classed growths).`,
           metrics: [],
           notes: [
             "Burgundy and right-bank Bordeaux fall outside the bundled dataset.",
@@ -185,7 +185,13 @@ function historicalRead(regionName: string, input: WeatherInput): WeatherSignals
   const schemaWindows = aggregateSchemaWindows(monthly, targetYear);
   const metrics = buildHistoricalMetrics(m, schemaWindows);
   const summary = formatHistoricalSummary(label, targetYear, rows.length, m, schemaWindows);
-  const notes = buildHistoricalNotes(yearClamped, requestedYear, maxYear, schemaWindows !== null);
+  const notes = buildHistoricalNotes(
+    yearClamped,
+    requestedYear,
+    maxYear,
+    schemaWindows !== null,
+    targetYear,
+  );
 
   return { summary, metrics, notes };
 }
@@ -393,6 +399,7 @@ function buildHistoricalNotes(
   requestedYear: number,
   maxYear: number,
   hasSchemaWindows: boolean,
+  targetYear: number,
 ): string[] {
   const notes: string[] = [];
   if (yearClamped) {
@@ -400,9 +407,15 @@ function buildHistoricalNotes(
       `Requested vintage ${requestedYear} is beyond historical coverage (last year ${maxYear}); using ${maxYear} as nearest analogue.`,
     );
   }
-  notes.push(
-    "Source: ERA5 reanalysis (DEM-downscaled per château). GST bias +0.11 °C, RMSE 0.48 °C, r=0.82 vs 6 Météo-France stations (188 station-years).",
-  );
+  if (targetYear === 2025) {
+    notes.push(
+      "Vintage 2025 data sourced from NASA POWER (MERRA-2 reanalysis) instead of ERA5/Open-Meteo. Tmean bias vs ERA5 typically <0.5 °C over Bordeaux; sunshine synthesized from radiation with a calibrated factor (1.70 MJ/m² per equivalent sunshine hour).",
+    );
+  } else {
+    notes.push(
+      "Source: ERA5 reanalysis (DEM-downscaled per château). GST bias +0.11 °C, RMSE 0.48 °C, r=0.82 vs 6 Météo-France stations (188 station-years).",
+    );
+  }
   notes.push(
     "Aug-Sep diurnal range systematically under-estimated by ~2.3 °C (ERA5 boundary-layer mixing artefact); year-to-year ordering reliable (r=0.80) but absolute values run low.",
   );
