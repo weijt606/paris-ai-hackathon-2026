@@ -2,12 +2,109 @@ import "server-only";
 import type { AnalyzeInput, AnalyzeResult } from "@/lib/wine/types";
 import { bandOf } from "@/lib/wine/types";
 import type { GeoSignals } from "@/lib/agents/sub-agents/geo";
+import type { WeatherSignals } from "@/lib/agents/sub-agents/weather";
 
 /**
  * Demo fixtures — deterministic responses for NEXT_PUBLIC_DEMO_MODE=true.
  * Used for offline rehearsal and to save credits during dev. Every new
  * sponsor / sub-agent call should add a fixture branch here (H3).
  */
+
+export function demoWeatherSignals(regionId: string, chateau?: string): WeatherSignals {
+  // Numbers borrowed from climate_features_downscaled.csv — Lafite 2010
+  // (a reference warm-dry Bordeaux vintage) so the fixture is physically
+  // self-consistent rather than synthetic.
+  if (chateau) {
+    return {
+      summary: [
+        `Vintage 2010 climate (${chateau}, Pauillac):`,
+        "  Growing-season temperature 18.6 °C (warm).",
+        "  Growing degree days base 10: 1742 °C·day.",
+        "  Harvest rain 67 mm Aug-Sep (dry — favourable for ripening).",
+        "  Heat-stress days (Tmax≥35 °C): 4 in growing season.",
+        "  Cool-night index ~13.2 °C (Sept Tmin approx; preserves acidity).",
+        "  Diurnal range Aug-Sep: 10.5 °C (wide — good aromatic development).",
+        "  Spring frost: 0 days ≤0 °C Apr-May.",
+        "  Winter precipitation 543 mm Oct(prev)-Mar.",
+        "  Huglin index ~2210 (approx).",
+        "Overall: textbook warm-dry profile — strong vintage potential.",
+      ].join("\n"),
+      metrics: [
+        { name: "GST", value: 18.6, unit: "°C" },
+        { name: "GDD10", value: 1742, unit: "°C·day" },
+        { name: "harvest_rain", value: 67, unit: "mm" },
+        { name: "winter_rain", value: 543, unit: "mm" },
+        { name: "heat_days", value: 4, unit: "days ≥35°C" },
+        { name: "spring_frost_events", value: 0, unit: "days ≤0°C" },
+        { name: "diurnal_temperature_range", value: 10.5, unit: "°C" },
+        { name: "huglin_index", value: 2210, unit: "°C·day (approx)" },
+        { name: "cool_night_index", value: 13.2, unit: "°C (approx)" },
+      ],
+      notes: [
+        "Demo fixture — Lafite Rothschild vintage 2010 historical reference.",
+        "ERA5 DEM-downscaled per château; bias +0.11 °C, RMSE 0.48 °C vs Météo-France stations.",
+      ],
+    };
+  }
+  if (regionId === "bordeaux-medoc") {
+    return {
+      summary: [
+        "Vintage 2010 climate (Médoc, 60 châteaux mean):",
+        "  Growing-season temperature 18.4 °C (warm).",
+        "  Growing degree days base 10: 1718 °C·day.",
+        "  Harvest rain 72 mm Aug-Sep (dry — favourable).",
+        "  Heat-stress days (Tmax≥35 °C): 3.6 mean.",
+        "  Cool-night index ~13.0 °C (preserves acidity).",
+        "  Diurnal range Aug-Sep: 10.4 °C (wide — good aromatic development).",
+        "  Spring frost: 0.1 days.",
+        "  Winter precipitation 528 mm.",
+        "  Huglin index ~2190 (approx).",
+        "Overall: textbook warm-dry profile — strong vintage potential.",
+      ].join("\n"),
+      metrics: [
+        { name: "GST", value: 18.4, unit: "°C" },
+        { name: "harvest_rain", value: 72, unit: "mm" },
+        { name: "winter_rain", value: 528, unit: "mm" },
+        { name: "heat_days", value: 3.6, unit: "days ≥35°C" },
+        { name: "spring_frost_events", value: 0.1, unit: "days ≤0°C" },
+        { name: "diurnal_temperature_range", value: 10.4, unit: "°C" },
+        { name: "huglin_index", value: 2190, unit: "°C·day (approx)" },
+        { name: "cool_night_index", value: 13.0, unit: "°C (approx)" },
+      ],
+      notes: [
+        "Demo fixture — Médoc 2010 vintage, 60-château AOC-mean aggregate.",
+        "Source: ERA5 DEM-downscaled; year-to-year ordering reliable (r=0.82 vs station truth).",
+      ],
+    };
+  }
+  if (regionId === "bordeaux-graves") {
+    return {
+      summary: [
+        "Vintage 2010 climate (Pessac-Léognan, Haut-Brion):",
+        "  Growing-season temperature 18.8 °C (warm).",
+        "  Harvest rain 81 mm Aug-Sep (moderate).",
+        "  Heat-stress days (Tmax≥35 °C): 5.",
+        "  Diurnal range Aug-Sep: 9.8 °C.",
+        "  Spring frost: 0 days.",
+        "Overall: textbook warm-dry profile.",
+      ].join("\n"),
+      metrics: [
+        { name: "GST", value: 18.8, unit: "°C" },
+        { name: "harvest_rain", value: 81, unit: "mm" },
+        { name: "heat_days", value: 5, unit: "days ≥35°C" },
+        { name: "diurnal_temperature_range", value: 9.8, unit: "°C" },
+      ],
+      notes: ["Demo fixture — Haut-Brion 2010 single-site reference."],
+    };
+  }
+  return {
+    summary: `${regionId} (fixture): no per-château climate coverage in dataset.`,
+    metrics: [],
+    notes: [
+      "Demo fixture — region outside the 61-château left-bank Bordeaux dataset.",
+    ],
+  };
+}
 
 export function demoGeoSignals(regionId: string, chateau?: string): GeoSignals {
   if (chateau) {
