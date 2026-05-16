@@ -47,7 +47,9 @@ const BACKTEST_RESPONSE_SCHEMA = {
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["source", "quote"],
+          // OpenAI strict json_schema requires every property in `required`.
+          // Nullable types handle the "absent" case.
+          required: ["source", "score", "scale", "quote", "url"],
           properties: {
             source: { type: "string" },
             score: { type: ["number", "null"] },
