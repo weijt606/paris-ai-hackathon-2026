@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 
 const config: NextConfig = {
   reactStrictMode: true,
+  // Hide the Next.js dev indicator badge (bottom-right floating pip + "static/dynamic"
+  // route hint). Keeps the live demo clean — they're invisible in production anyway,
+  // disabling them locally just matches what judges will see.
+  devIndicators: false,
   experimental: {
     serverActions: { bodySizeLimit: "10mb" },
   },
