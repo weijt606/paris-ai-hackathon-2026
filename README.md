@@ -9,26 +9,104 @@ Multi-agent risk + market intelligence for French wine regions (Burgundy & Borde
 
 ## Quick start
 
+### Prerequisites
+
+| | Min | Verify |
+|---|---|---|
+| Node.js | `>=20` | `node -v` |
+| pnpm | `>=10` | `pnpm -v` (install via `npm install -g pnpm@latest` or `corepack enable`) |
+| Git | any | `git --version` |
+
+macOS / Linux / WSL2 all work. Native Windows isn't tested.
+
+### 1. Clone and install
+
 ```bash
+git clone https://github.com/weijt606/paris-ai-hackathon-2026.git
+cd paris-ai-hackathon-2026
 pnpm install
-cp .env.example .env.local       # fill OPENAI_API_KEY (required)
-pnpm check:env                   # verify OpenAI + Tavily + Pioneer keys
-pnpm dev                         # → http://localhost:3000
 ```
 
-Demo-mode end-to-end (no keys needed):
+### 2. Configure environment
 
 ```bash
+cp .env.example .env.local
+```
+
+Open `.env.local` and fill in the keys. Only **OpenAI** is required for the
+LLM-driven pipeline; everything else degrades to a fixture or fallback when
+its key is missing:
+
+| Variable | Required? | What it does | Where to get it |
+|---|---|---|---|
+| `OPENAI_API_KEY` | **Yes** for the live pipeline | Orchestrator, extraction, feature tier 2, backtest | <https://platform.openai.com/api-keys> |
+| `OPENAI_MODEL` | optional, default `gpt-4o-mini` | The agent LLM. **Don't use reasoning models** (`gpt-5*`, `o1`, `o3`) — they add 20-40 s of internal thinking that doesn't help structured JSON | — |
+| `TAVILY_API_KEY` | optional | Public-web grounding for the `tavily_agent` + backtest critic retrieval | <https://app.tavily.com/home> |
+| `PIONEER_API_KEY` | optional | `feature_agent` tier 1 (small open-source LLM for narrative wrapping) | <https://docs.pioneer.ai/> |
+| `PIONEER_MODEL_ID` | optional | Pioneer model UUID — picked from the Pioneer dashboard after deploying / selecting a model | Pioneer dashboard |
+| `NEXT_PUBLIC_DEMO_MODE` | optional, default `false` | Set `true` to short-circuit the entire pipeline to fixtures (no network, no keys needed) | — |
+| `NEXT_PUBLIC_DEMO_FAST` | optional, default `true` | Direct-dispatch pipeline. Set `false` to fall back to the legacy GPT tool-use routing loop (~80 s/call) | — |
+
+> `.env.local` is git-ignored. **Never commit real keys.** The repo is public.
+
+### 3. Verify the environment
+
+```bash
+pnpm check:env
+```
+
+Pings OpenAI, Tavily, and Pioneer with the keys you configured and reports
+which sub-agents will run live vs. degraded. Exits non-zero if `OPENAI_API_KEY`
+is missing or invalid.
+
+### 4. Run the dev server
+
+```bash
+pnpm dev
+# → http://localhost:3000
+```
+
+Open the URL, pick a region or château, click **Run analysis**, watch the
+WorkflowHero animate through the agents. Typical cold call: ~35-55 s.
+The orchestrator caches results in-memory for 30 min, so the **second** run
+of the same query returns in <50 ms.
+
+### Useful scripts
+
+| Command | Purpose |
+|---|---|
+| `pnpm dev` | Dev server with Turbopack HMR |
+| `pnpm build && pnpm start` | Production build + serve |
+| `pnpm typecheck` | `tsc --noEmit` strict type check |
+| `pnpm lint` | Next.js / ESLint |
+| `pnpm format` | Prettier write |
+| `pnpm format:check` | Prettier check (CI-friendly) |
+| `pnpm check:env` | Sponsor key ping |
+| `pnpm test:geo` | Smoke-test `geo_agent` directly (bypasses orchestrator) |
+| `pnpm test:weather` | Smoke-test `weather_agent` directly |
+| `pnpm export:tavily-cache` | Dump the current `tavily-search.sqlite` cache to `data/tavily-cache-export.json` for repo-shipped warmup |
+
+### Run modes
+
+```bash
+# Default — full agent pipeline, ~35-55 s cold, <50 ms warm
+pnpm dev
+
+# Offline rehearsal — no API calls, fixtures only, instant
 NEXT_PUBLIC_DEMO_MODE=true pnpm dev
-# → orchestrator returns fixtures from src/lib/demo/fixtures.ts
-```
 
-Legacy GPT-routing path (slow, useful for debugging the tool-use loop):
-
-```bash
+# Legacy GPT-routing loop — orchestrator lets the LLM decide tool order
+# (~80 s/call). Useful for experimenting with adaptive routing.
 NEXT_PUBLIC_DEMO_FAST=false pnpm dev
-# → orchestrator uses the OpenAI tool-use loop end-to-end (~80 s/call)
 ```
+
+### Troubleshooting
+
+- **Port 3000 in use** — Next picks the next free port (3001, 3002…). Watch the dev-server log.
+- **`pnpm: command not found`** — `npm install -g pnpm@latest` or `corepack enable && corepack prepare pnpm@latest --activate`.
+- **`check:env` errors with "Invalid server environment variables"** — check `.env.local` for trailing whitespace or unquoted special characters around the API keys.
+- **Tavily quota exhausted mid-demo** — the SQLite cache is committed pre-hydrated to `data/tavily-cache-export.json`; cached queries return without a network call. To pre-warm a specific query, run it once locally before the demo.
+- **First analysis times out at ~30 s** — that's the request abort budget. Increase `OpenAI` client timeout or set `NEXT_PUBLIC_DEMO_MODE=true` for offline mode.
 
 ## Architecture — end-to-end
 
