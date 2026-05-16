@@ -1,8 +1,23 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { useT } from "@/lib/i18n/Provider";
-import { BordeauxMap } from "@/components/wine/trade/BordeauxMap";
+
+// react-simple-maps does geo-projection math that yields slightly different
+// floating-point output on Node (SSR) vs V8 in the browser (client), which
+// trips Next's hydration check on Marker transform attributes. Render the
+// map client-only — there's nothing useful to SSR for an interactive map.
+const BordeauxMap = dynamic(
+  () =>
+    import("@/components/wine/trade/BordeauxMap").then((m) => m.BordeauxMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="aspect-[5/4] w-full animate-pulse rounded-md border bg-muted/40" />
+    ),
+  },
+);
 import { ExecutiveSummary } from "@/components/wine/ExecutiveSummary";
 import { RiskCard } from "@/components/wine/RiskCard";
 import { TerroirCard } from "@/components/wine/TerroirCard";
