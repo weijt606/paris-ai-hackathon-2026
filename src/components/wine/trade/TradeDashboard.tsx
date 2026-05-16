@@ -86,10 +86,15 @@ export function TradeDashboard() {
       <div className="grid gap-8 lg:grid-cols-[420px_1fr]">
         <aside className="space-y-6">
           <BordeauxMap
-            selectedId={selected.id}
-            onSelect={(id, name) => setSelected({ id, name })}
             selectedChateau={chateau?.name ?? null}
-            onChateauSelect={setChateau}
+            onChateauSelect={(c) => {
+              if (c) {
+                setChateau({ name: c.name, aoc: c.aoc });
+                setSelected({ id: c.regionId, name: c.regionName });
+              } else {
+                setChateau(null);
+              }
+            }}
           />
 
           <div className="rounded-md border p-4 print:hidden">

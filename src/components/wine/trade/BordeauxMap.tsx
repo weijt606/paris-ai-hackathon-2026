@@ -1,18 +1,15 @@
 "use client";
 
-import { ComposableMap, Geographies, Geography, Marker } from "react-simple-maps";
+import { CircleMarker, MapContainer, Popup, TileLayer } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
 import { useT } from "@/lib/i18n/Provider";
-import { BORDEAUX_BENCHMARKS } from "@/lib/wine/bordeaux-benchmarks";
-import { FRANCE_GEO } from "@/lib/wine/bordeaux-geo";
 import CHATEAUX from "@/lib/wine/chateaux-static.json";
 
 interface Props {
-  selectedId: string;
-  onSelect: (id: string, name: string) => void;
-  /** Currently focused château name (case-insensitive substring match against chateau.name). */
   selectedChateau?: string | null;
-  /** Click handler on a single château dot. Pass null to clear selection. */
-  onChateauSelect?: (chateau: { name: string; aoc: string } | null) => void;
+  onChateauSelect?: (
+    chateau: { name: string; aoc: string; regionId: string; regionName: string } | null,
+  ) => void;
 }
 
 interface ChateauPoint {
@@ -20,32 +17,40 @@ interface ChateauPoint {
   aoc: string;
   growth: string;
   growth_num: number;
+  commune: string;
   lat: number;
   lon: number;
+  elevation_m: number | null;
+  dist_gironde_km: number | null;
 }
 
-// 1855 growth-number → wine-palette
+// 1855 growth-number → wine-palette (kept in sync with workflow + charts).
 const GROWTH_COLORS: Record<number, string> = {
-  1: "hsl(var(--chart-5))", // Premier Cru → gold
-  2: "hsl(var(--chart-2))", // 2e Cru → cognac
-  3: "hsl(var(--chart-1))", // 3e Cru → bordeaux
-  4: "hsl(var(--chart-3))", // 4e Cru → sage
-  5: "hsl(var(--chart-4))", // 5e Cru → navy
+  1: "hsl(40 50% 48%)", //  Premier Cru — gold
+  2: "hsl(28 50% 42%)", //  2e Cru     — cognac
+  3: "hsl(350 55% 32%)", // 3e Cru     — bordeaux
+  4: "hsl(150 22% 38%)", // 4e Cru     — sage
+  5: "hsl(220 30% 32%)", // 5e Cru     — navy
 };
 
-// Aggregate AOC markers (existing, clickable) take their colour from the
-// risk band. Match RegionalRiskChart palette for visual coherence.
-function colorForScore(score: number): string {
-  if (score < 40) return "hsl(var(--chart-3))";
-  if (score < 55) return "hsl(var(--chart-5))";
-  if (score < 70) return "hsl(var(--chart-2))";
-  return "hsl(var(--chart-1))";
+const GROWTH_LABEL: Record<number, string> = {
+  1: "Premier",
+  2: "Deuxième",
+  3: "Troisième",
+  4: "Quatrième",
+  5: "Cinquième",
+};
+
+/** Map a château's AOC to its parent region id used by the dashboard. */
+function regionFromAoc(aoc: string): { id: string; name: string } {
+  if (aoc === "Pessac-Léognan") return { id: "bordeaux-graves", name: "Graves" };
+  return { id: "bordeaux-medoc", name: "Médoc" };
 }
 
-export function BordeauxMap({ selectedId, onSelect, selectedChateau, onChateauSelect }: Props) {
+export function BordeauxMap({ selectedChateau, onChateauSelect }: Props) {
   const t = useT();
-  const chateaux = CHATEAUX as ChateauPoint[];
   const chateauNorm = (selectedChateau ?? "").toLowerCase();
+  const chateaux = CHATEAUX as ChateauPoint[];
 
   return (
     <figure className="rounded-md border bg-card p-6">
@@ -53,148 +58,97 @@ export function BordeauxMap({ selectedId, onSelect, selectedChateau, onChateauSe
         {t("trade.map.title")}
       </figcaption>
       <p className="mb-3 text-[10px] text-muted-foreground">
-        61 × 1855 classés · 6 AOC aggregates
+        61 × 1855 classés · scroll / pinch to zoom · click château to focus
       </p>
-      <div className="aspect-[5/4] w-full overflow-hidden">
-        <ComposableMap
-          projection="geoMercator"
-          projectionConfig={{ center: [-0.5, 44.85], scale: 7500 }}
-          width={500}
-          height={400}
-          style={{ width: "100%", height: "100%" }}
+
+      <div className="aspect-[5/4] w-full overflow-hidden rounded-md border bg-muted/30">
+        <MapContainer
+          center={[45.05, -0.7]}
+          zoom={9}
+          minZoom={8}
+          maxZoom={13}
+          scrollWheelZoom
+          style={{ height: "100%", width: "100%" }}
         >
-          <Geographies geography={FRANCE_GEO as unknown as object}>
-            {({ geographies }) =>
-              geographies.map((geo) => (
-                <Geography
-                  key={geo.rsmKey}
-                  geography={geo}
-                  fill="hsl(var(--muted))"
-                  fillOpacity={0.45}
-                  stroke="hsl(var(--border))"
-                  strokeWidth={0.6}
-                  style={{
-                    default: { outline: "none" },
-                    hover: { outline: "none" },
-                    pressed: { outline: "none" },
-                  }}
-                />
-              ))
-            }
-          </Geographies>
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> · <a href="https://carto.com/attributions">CARTO</a>'
+            url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+            subdomains={["a", "b", "c", "d"]}
+          />
 
-          {/* 61 individual châteaux — informational dots, sized + coloured by 1855 growth.
-              Clickable when onChateauSelect prop is wired. */}
           {chateaux.map((c) => {
-            const isActive = chateauNorm.length > 0 && c.name.toLowerCase().includes(chateauNorm);
-            const baseR = c.growth_num === 1 ? 2.6 : 1.7;
+            const isActive =
+              chateauNorm.length > 0 && c.name.toLowerCase().includes(chateauNorm);
+            const baseR = c.growth_num === 1 ? 7 : 5;
             const r = isActive ? baseR + 2 : baseR;
-            return (
-              <Marker key={c.name} coordinates={[c.lon, c.lat]}>
-                {isActive && (
-                  <circle
-                    r={r + 4}
-                    fill={GROWTH_COLORS[c.growth_num] ?? "hsl(var(--muted-foreground))"}
-                    fillOpacity={0.25}
-                  />
-                )}
-                <circle
-                  r={r}
-                  fill={GROWTH_COLORS[c.growth_num] ?? "hsl(var(--muted-foreground))"}
-                  fillOpacity={isActive ? 1 : c.growth_num <= 2 ? 0.9 : 0.7}
-                  stroke={isActive ? "hsl(var(--foreground))" : "hsl(var(--background))"}
-                  strokeWidth={isActive ? 0.9 : 0.4}
-                  className={onChateauSelect ? "cursor-pointer" : ""}
-                  style={{ pointerEvents: "auto", transition: "r 220ms ease-out" }}
-                  onClick={() => {
-                    if (!onChateauSelect) return;
-                    if (isActive) onChateauSelect(null);
-                    else onChateauSelect({ name: c.name, aoc: c.aoc });
-                  }}
-                >
-                  <title>{`${c.name} · ${c.aoc} · ${c.growth}`}</title>
-                </circle>
-              </Marker>
-            );
-          })}
+            const color = GROWTH_COLORS[c.growth_num] ?? "#888";
 
-          {/* 6 AOC aggregate markers (clickable — drives selection / analyze) */}
-          {BORDEAUX_BENCHMARKS.map((b) => {
-            const active = b.id === selectedId;
-            const color = colorForScore(b.score);
             return (
-              <Marker key={b.id} coordinates={[b.lng, b.lat]}>
-                {active && (
-                  <circle
-                    r={18}
-                    fill={color}
-                    fillOpacity={0.18}
-                    style={{ transition: "all 300ms ease-out" }}
-                  />
-                )}
-                <circle
-                  r={active ? 7 : 5}
-                  fill={color}
-                  stroke="hsl(var(--background))"
-                  strokeWidth={1.5}
-                  className="cursor-pointer"
-                  style={{ transition: "r 250ms ease-out, fill 250ms ease-out" }}
-                  onClick={() => onSelect(b.id, b.name)}
-                />
-                <text
-                  textAnchor="middle"
-                  y={active ? -14 : -11}
-                  className="pointer-events-none select-none fill-foreground"
-                  style={{
-                    fontSize: 9.5,
-                    fontWeight: active ? 600 : 400,
-                    letterSpacing: "0.02em",
-                    transition: "all 250ms ease-out",
-                  }}
-                >
-                  {b.name}
-                </text>
-              </Marker>
+              <CircleMarker
+                key={c.name}
+                center={[c.lat, c.lon]}
+                radius={r}
+                pathOptions={{
+                  color: isActive ? "#000" : "#fff",
+                  weight: isActive ? 2 : 1,
+                  fillColor: color,
+                  fillOpacity: 0.88,
+                }}
+                eventHandlers={{
+                  click: () => {
+                    if (!onChateauSelect) return;
+                    if (isActive) {
+                      onChateauSelect(null);
+                    } else {
+                      const region = regionFromAoc(c.aoc);
+                      onChateauSelect({
+                        name: c.name,
+                        aoc: c.aoc,
+                        regionId: region.id,
+                        regionName: region.name,
+                      });
+                    }
+                  },
+                }}
+              >
+                <Popup>
+                  <div className="text-xs leading-relaxed">
+                    <div className="text-[13px] font-semibold">{c.name}</div>
+                    <div className="mt-0.5 text-muted-foreground">
+                      {GROWTH_LABEL[c.growth_num] ?? `${c.growth_num}e`} Cru · {c.aoc}
+                    </div>
+                    <div className="text-muted-foreground">{c.commune}</div>
+                    {(c.elevation_m !== null || c.dist_gironde_km !== null) && (
+                      <div className="mt-1.5 font-mono text-[10px] text-muted-foreground">
+                        {c.elevation_m !== null && `${Math.round(c.elevation_m)} m`}
+                        {c.elevation_m !== null && c.dist_gironde_km !== null && " · "}
+                        {c.dist_gironde_km !== null &&
+                          `${c.dist_gironde_km.toFixed(1)} km from Gironde`}
+                      </div>
+                    )}
+                  </div>
+                </Popup>
+              </CircleMarker>
             );
           })}
-        </ComposableMap>
+        </MapContainer>
       </div>
 
-      {/* legend — two rows: 1855 growths (top) + AOC risk bands (bottom) */}
-      <div className="mt-3 space-y-1.5">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[9px] uppercase tracking-luxe text-muted-foreground">
-          <span className="font-medium">1855 cru</span>
-          {[1, 2, 3, 4, 5].map((g) => (
-            <span key={g} className="inline-flex items-center gap-1">
-              <span
-                className="inline-block rounded-full"
-                style={{
-                  width: g === 1 ? 6 : 4,
-                  height: g === 1 ? 6 : 4,
-                  background: GROWTH_COLORS[g],
-                }}
-              />
-              {g === 1 ? "Premier" : `${g}e`}
-            </span>
-          ))}
-        </div>
-        <div className="flex items-center justify-end gap-4 text-[9px] uppercase tracking-luxe text-muted-foreground">
-          <span className="font-medium">AOC risk</span>
-          <span className="inline-flex items-center gap-1">
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[9px] uppercase tracking-luxe text-muted-foreground">
+        <span className="font-medium">1855 cru</span>
+        {[1, 2, 3, 4, 5].map((g) => (
+          <span key={g} className="inline-flex items-center gap-1">
             <span
-              className="inline-block h-1.5 w-1.5 rounded-full"
-              style={{ background: "hsl(var(--chart-3))" }}
+              className="inline-block rounded-full"
+              style={{
+                width: g === 1 ? 6 : 4,
+                height: g === 1 ? 6 : 4,
+                background: GROWTH_COLORS[g],
+              }}
             />
-            {t("trade.map.legend_low")}
+            {g === 1 ? "Premier" : `${g}e`}
           </span>
-          <span className="inline-flex items-center gap-1">
-            <span
-              className="inline-block h-1.5 w-1.5 rounded-full"
-              style={{ background: "hsl(var(--chart-1))" }}
-            />
-            {t("trade.map.legend_high")}
-          </span>
-        </div>
+        ))}
       </div>
     </figure>
   );

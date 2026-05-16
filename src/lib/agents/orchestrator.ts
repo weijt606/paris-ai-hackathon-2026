@@ -192,9 +192,16 @@ export async function analyze(
 }
 
 function harvest(input: AnalyzeInput, trace: AgentResult[]): AnalyzeResult {
-  const extraction = [...trace].reverse().find((r) => r.agent === "extraction_agent" && r.ok);
-  const feature = [...trace].reverse().find((r) => r.agent === "feature_agent" && r.ok);
-  const geo = [...trace].reverse().find((r) => r.agent === "geo_agent" && r.ok);
+  // Defensive harvest: prefer ok:true, but fall back to any trace entry
+  // with data attached. This way a degraded sub-agent (returning fallback
+  // data alongside an error string) still contributes to the AnalyzeResult.
+  const lastFor = (name: string): AgentResult | undefined => {
+    const rev = [...trace].reverse();
+    return rev.find((r) => r.agent === name && r.ok) ?? rev.find((r) => r.agent === name && r.data);
+  };
+  const extraction = lastFor("extraction_agent");
+  const feature = lastFor("feature_agent");
+  const geo = lastFor("geo_agent");
 
   const extractionData = extraction?.data as Partial<ExtractionOutput> | undefined;
   const featureData = feature?.data as FeatureSummary | undefined;

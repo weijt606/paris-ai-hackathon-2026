@@ -178,7 +178,6 @@ async function tryPioneer(input: FeatureInput, signal: AbortSignal): Promise<{ d
     ],
     {
       responseFormat: { type: "json_object" },
-      temperature: 0.45,
       timeoutMs: 12_000,
     },
   );
@@ -207,7 +206,7 @@ async function tryOpenAI(input: FeatureInput, signal: AbortSignal): Promise<Feat
           { role: "user", content: buildUserMessage(input) },
         ],
         response_format: { type: "json_schema", json_schema: OPENAI_RESPONSE_SCHEMA },
-        temperature: 0.4,
+        // Newer OpenAI reasoning models reject custom temperature; default 1 is enforced.
       },
       { signal },
     );
@@ -288,11 +287,11 @@ export const featureAgent: SubAgent<FeatureInput, FeatureOutput> = {
       };
     }
 
-    // tier 3 — deterministic template
+    // tier 3 — deterministic template (valid data regardless of cause)
     const reason = !integrations.pioneer && !sponsors.openai ? "no llm configured" : "all llm tiers failed";
     return {
       agent: "feature_agent",
-      ok: !!reason && reason === "no llm configured",
+      ok: true,
       durationMs: Date.now() - t0,
       data: templateFallback(input, reason),
       summary: `template · ${reason}`,
