@@ -301,24 +301,26 @@ Owner 待定。当前是 passthrough stub。两个候选方向：
 Pioneer.ai 是 **OpenAI-compatible LLM hosting**（POST `/v1/chat/completions`，Bearer 鉴权）。
 文档：https://docs.pioneer.ai/
 
-**两阶段路线，代码完全不变（只换 PIONEER_MODEL_ID）：**
+**当前定位（feature_agent tier-1 LLM）：**
 
 ```
-阶段 1（现在）       阶段 2（dev/data 团队训完）
-─────────────────  ───────────────────────────────
-Pioneer hosted     Pioneer fine-tuned local
-gpt-5.5 (uuid)     wine-domain model (uuid)
-       │                       │
-       └─────── pioneerChat() ─┘     ◄── 同一个 fetch 调用
-                  │
-                  ▼
-       extraction_agent / feature_agent
+extraction (OpenAI gpt-4o-mini · schema-grounded JSON)
+        │
+        ▼
+feature (3-tier)
+  ├─ tier 1 → Pioneer-hosted 开源模型（Qwen / GLM / Llama 7-8B 类）
+  │           — 小模型负责"包装"（exec summary · report · digest）
+  │           — response_format: json_object + 提示明确 JSON 契约
+  │           — 比 gpt-4o-mini 快 / 便宜，演示故事更紧
+  ├─ tier 2 → OpenAI structured output (json_schema strict) fallback
+  └─ tier 3 → deterministic template，从 extraction 输出拼装
 ```
 
-**为什么不直接用 OpenAI**：
-- Sponsor 要求接入 Pioneer
-- 现在 hosted gpt-5.5 没有微调能力 → 但本地模型可微调，dev 用葡萄酒行业语料训练后 swap model_id 就能切换
-- 架构上**用 Pioneer 做 wine-domain heavy reasoning**（extraction / feature），orchestrator 仍用 OpenAI（gpt-4o-mini 调度成本低）
+**为什么这样分工**：
+- gpt 类大模型做**重推理**（extraction 走 schema 算分，需要遵循复杂规则）
+- Pioneer host 的小开源 LLM 做**轻量包装/生成**（feature 把数字翻成 markdown）
+- Pioneer 当前 hosted gpt-5.5 不可微调；**Pioneer 本地模型可微调** —— dev/data team 拿葡萄酒行业语料训练一个 wine-domain 本地模型后，**swap PIONEER_MODEL_ID 就生效，feature.ts 代码 0 改动**
+- Sponsor 集成有实际功能价值，不是装饰
 
 Adapter `src/lib/training/pioneer.ts` 对外只暴露 **一个函数**：
 
@@ -338,18 +340,18 @@ pioneerChat(messages: PioneerChatMessage[], opts?: {
 **典型 caller**：
 
 ```ts
-// extraction_agent (推荐主用 Pioneer)
+// feature_agent (tier-1, 当前主调用方)
 import { pioneerChat } from "@/lib/training/pioneer";
 
 const res = await pioneerChat(
   [
-    { role: "system", content: "You are a wine risk analyst. Return JSON {score, drivers, recommendations}." },
-    { role: "user", content: buildExtractionPrompt(input) },
+    { role: "system", content: "...Output STRICTLY this JSON: {executiveSummary, reportMarkdown, emailDigest}..." },
+    { role: "user", content: buildExtractionSummaryFromInput(input) },
   ],
   { responseFormat: { type: "json_object" }, temperature: 0.2 },
 );
-if (res) return parseRiskJSON(res.content);
-// 否则降级到 OpenAI structured / heuristic
+if (res) return JSON.parse(res.content);
+// 否则降级到 tier-2 OpenAI structured，再失败到 tier-3 template
 ```
 
 **Env 配置**：

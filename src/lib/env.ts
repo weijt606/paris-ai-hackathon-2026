@@ -22,7 +22,13 @@ const publicSchema = z.object({
 });
 
 function parseEnv() {
-  const server = serverSchema.safeParse(process.env);
+  // Empty-string env vars (common when a placeholder line like `KEY=` is
+  // left in .env.local) should be treated as unset, not as values that
+  // fail .min(1). Filter them out before validation.
+  const cleanedEnv = Object.fromEntries(
+    Object.entries(process.env).filter(([, v]) => v !== ""),
+  );
+  const server = serverSchema.safeParse(cleanedEnv);
   if (!server.success) {
     console.error("❌ Invalid server env:", server.error.flatten().fieldErrors);
     throw new Error("Invalid server environment variables");

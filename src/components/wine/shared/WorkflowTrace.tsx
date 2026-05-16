@@ -62,8 +62,8 @@ const NODES: Record<NodeKey, NodeDef> = {
   geo_agent:         { cx: 90, cy: 76,  w: 44, h: 16, label: "geo",          sub: "terroir",          icon: "G", kind: "agent" },
   tavily_agent:      { cx: 152, cy: 76, w: 44, h: 16, label: "tavily",       sub: "public web",       icon: "T", kind: "agent" },
   extraction_agent:  { cx: 78, cy: 110, w: 70, h: 20, label: "extraction",   sub: "risk evaluator",   icon: "E", kind: "router" },
-  pioneer:           { cx: 156, cy: 110,w: 36, h: 14, label: "pioneer",      sub: "gpt-5.5",          icon: "P", kind: "tool" },
   feature_agent:     { cx: 78, cy: 142, w: 70, h: 20, label: "feature",      sub: "summary · report", icon: "F", kind: "agent" },
+  pioneer:           { cx: 156, cy: 142,w: 36, h: 14, label: "pioneer",      sub: "wine LLM",         icon: "P", kind: "tool" },
   dashboard:         { cx: 78, cy: 174, w: 70, h: 18, label: "dashboard",    sub: "result",           icon: "D", kind: "output" },
 };
 
@@ -82,8 +82,8 @@ const EDGES: Edge[] = [
   { from: "weather_agent", to: "extraction_agent" },
   { from: "geo_agent", to: "extraction_agent" },
   { from: "tavily_agent", to: "extraction_agent" },
-  { from: "extraction_agent", to: "pioneer", style: "tool" },
   { from: "extraction_agent", to: "feature_agent" },
+  { from: "feature_agent", to: "pioneer", style: "tool" },
   { from: "feature_agent", to: "dashboard" },
 ];
 

@@ -3,7 +3,7 @@
 Multi-agent risk + market intelligence for French wine regions (Burgundy & Bordeaux). Built for the Paris AI Hackathon 2026.
 
 **Sponsors:** OpenAI · Tavily · Pioneer.ai
-**Architecture:** Input → OpenAI orchestrator (tool-use loop) → three parallel sub-agents (weather · geo · tavily) → schema-grounded extraction (OpenAI + wine-vintage-quality-schema, with Pioneer as a tool-call sidecar) → feature agent (OpenAI) → dashboard + report + email digest.
+**Architecture:** Input → OpenAI orchestrator (tool-use loop) → three parallel sub-agents (weather · geo · tavily) → schema-grounded extraction (OpenAI + wine-vintage-quality-schema) → feature agent (Pioneer-hosted wine LLM, with OpenAI as fallback) → dashboard + report + email digest.
 
 ## Quick start
 
@@ -81,16 +81,9 @@ The system is a pipeline of OpenAI-driven agents wired by a single tool-use loop
 │      4. Apply dynamic adjustments → ±points                                     │
 │      5. risk = 100 − quality, clamp [0, 100]   ← QUALITY→RISK INVERSION         │
 │                                                                                 │
-│    Optional tool call (sidecar):                                                │
-│      ┌─────────────────────────────────────┐                                    │
-│      │ Pioneer.ai — src/lib/training/      │                                    │
-│      │ pioneer.ts                          │                                    │
-│      │ OpenAI-compatible chat completions  │                                    │
-│      │ (hosted gpt-5.5 today; swap to a    │                                    │
-│      │ wine-fine-tuned local model later). │                                    │
-│      │ Same code path, just change         │                                    │
-│      │ PIONEER_MODEL_ID.                   │                                    │
-│      └─────────────────────────────────────┘                                    │
+│    Direct entry (bypasses GPT routing):                                         │
+│      ctx.uploads — vineyard-side user uploads attached to AgentContext.         │
+│      Extraction reads them as additional evidence in its OpenAI prompt.         │
 │                                                                                 │
 │    Output (strict JSON):                                                        │
 │      • score (0–100 RISK)        • drivers[] · weights sum ≤ 1                  │
@@ -98,27 +91,50 @@ The system is a pipeline of OpenAI-driven agents wired by a single tool-use loop
 │      • activeGates[]             • rationale                                    │
 │                                                                                 │
 │    Fallback ladder:                                                             │
-│      tier-1 OpenAI · tier-2 (when added) Pioneer · tier-3 heuristic stub        │
+│      tier-1 OpenAI · tier-2 heuristic stub                                      │
 └────────────────────────────────────┬────────────────────────────────────────────┘
                                      │ (orchestrator compresses extraction output
                                      │  into ≤1-sentence summaries for the next tool call)
                                      ▼
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │ 5. FEATURE — src/lib/agents/feature.ts                                          │
-│    Driven by OpenAI Chat Completions · response_format: json_schema (strict)    │
+│    Tiered LLM strategy with graceful degradation:                               │
+│                                                                                 │
+│      ┌─────────────────────────────────────┐                                    │
+│      │ tier 1 — Pioneer.ai (preferred)     │                                    │
+│      │ src/lib/training/pioneer.ts          │                                    │
+│      │ OpenAI-compatible chat completions  │                                    │
+│      │ hosting smaller open-source LLM     │                                    │
+│      │ (Qwen / GLM / Llama 7-8B class).    │                                    │
+│      │ response_format: json_object,       │                                    │
+│      │ JSON-shape enforced in prompt.      │                                    │
+│      │ Future: swap PIONEER_MODEL_ID to    │                                    │
+│      │ a Pioneer-fine-tuned wine-domain    │                                    │
+│      │ local model — same code path.       │                                    │
+│      └─────────────────┬───────────────────┘                                    │
+│                        │ (if null / parse fail)                                 │
+│                        ▼                                                        │
+│      ┌─────────────────────────────────────┐                                    │
+│      │ tier 2 — OpenAI structured output   │                                    │
+│      │ response_format: json_schema strict │                                    │
+│      └─────────────────┬───────────────────┘                                    │
+│                        │ (if null / network error)                              │
+│                        ▼                                                        │
+│      ┌─────────────────────────────────────┐                                    │
+│      │ tier 3 — deterministic template     │                                    │
+│      │ assembled from extraction output    │                                    │
+│      └─────────────────────────────────────┘                                    │
 │                                                                                 │
 │    Input (from GPT tool-call, sourced from extraction):                         │
 │      • regionId · persona · score · qualityBand                                 │
 │      • driversSummary · recommendationsSummary · rationale                      │
 │                                                                                 │
-│    Output (strict JSON, 3 artifacts):                                           │
+│    Output (3 artifacts):                                                        │
 │      ┌───────────────────────┬───────────────────────┬──────────────────────┐   │
 │      │ executiveSummary      │ reportMarkdown        │ emailDigest          │   │
 │      │ 2 sentences           │ ~250–400-word md      │ ~5–8 lines md        │   │
 │      │ → top of dashboard    │ → download / print    │ → subscribe preview  │   │
 │      └───────────────────────┴───────────────────────┴──────────────────────┘   │
-│                                                                                 │
-│    Fallback: deterministic template assembled from extraction output.           │
 └────────────────────────────────────┬────────────────────────────────────────────┘
                                      │
                                      ▼
@@ -156,8 +172,8 @@ The system is a pipeline of OpenAI-driven agents wired by a single tool-use loop
 |---|---|---|---|
 | **Orchestrator** | `OPENAI_MODEL` (gpt-4o-mini default) | tool_calls | tool descriptors built from each SubAgent's `input_schema` |
 | **Extraction** | `OPENAI_MODEL` | `response_format: json_schema` (strict) | `data/wine-vintage-quality-schema.json` in system prompt |
-| **Feature** | `OPENAI_MODEL` | `response_format: json_schema` (strict) | own response schema (executiveSummary / reportMarkdown / emailDigest) |
-| **Pioneer (sidecar)** | `PIONEER_MODEL_ID` (Pioneer-hosted gpt-5.5, or fine-tuned local) | chat completions | called from extraction or feature when configured |
+| **Feature — tier 1** | `PIONEER_MODEL_ID` (Pioneer-hosted wine LLM — Qwen / GLM / Llama class today; fine-tuned local later) | `response_format: json_object` + prompt-enforced shape | own JSON contract in system prompt |
+| **Feature — tier 2** | `OPENAI_MODEL` | `response_format: json_schema` (strict) | own response schema (fallback) |
 
 ### Degradation ladder
 
@@ -167,8 +183,9 @@ Every agent falls back gracefully so the dashboard stays demoable:
 demo mode (NEXT_PUBLIC_DEMO_MODE=true) ────► fixture pipeline (src/lib/demo/fixtures.ts)
 missing OPENAI_API_KEY ─────────────────────► fixture pipeline, flagged isDemoOrPartial
 extraction OpenAI call fails ───────────────► extraction heuristic stub
-feature OpenAI call fails ──────────────────► feature template (built from extraction output)
 schema file missing ────────────────────────► extraction heuristic stub
+feature Pioneer call fails / returns null ──► feature tier-2 OpenAI structured output
+feature OpenAI tier-2 also fails ───────────► feature tier-3 template (from extraction output)
 sub-agent (weather/geo/tavily) errors ──────► trace records ok:false, downstream continues
 ```
 
