@@ -76,7 +76,7 @@ async function run() {
       },
     ],
     [
-      "Year beyond historical coverage (2025 → clamps to 2024)",
+      "Vintage 2025 (NASA POWER backfill — hot dry year)",
       { regionId: "bordeaux-medoc", start: "2025-04-01", end: "2025-10-31" },
     ],
   ];
