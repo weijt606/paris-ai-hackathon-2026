@@ -15,6 +15,7 @@ export interface TavilyInput {
   endYear?: number;
   maxResultsPerQuery?: number;
   forceRefresh?: boolean;
+  chateau?: string;
   // Legacy fields (kept for compatibility with existing orchestrator prompts)
   regionId?: string;
   facets?: Array<"vineyard_official" | "news" | "forum" | "government" | "research">;
@@ -489,7 +490,10 @@ export async function runTavilyHarness(
   opts: { signal?: AbortSignal } = {},
 ): Promise<TavilyHarnessOutput> {
   const input = normalizeInput(rawInput);
-  const queries = buildQueries(input, rawInput.query);
+  const refinement = [rawInput.query, rawInput.chateau ? `chateau ${rawInput.chateau}` : ""]
+    .filter((part): part is string => Boolean(part && part.trim()))
+    .join(" ");
+  const queries = buildQueries(input, refinement || undefined);
   const settled = await runQueryPool(
     queries,
     async (spec) => {
@@ -501,6 +505,8 @@ export async function runTavilyHarness(
       try {
         const cacheInput = {
           region: input.region,
+          regionScope: rawInput.regionId ?? "",
+          chateau: rawInput.chateau ?? "",
           year: spec.year,
           sourceType: spec.sourceType,
           query: spec.query,
@@ -659,8 +665,9 @@ export const tavilyAgent: SubAgent<TavilyInput, TavilySignals> = {
         type: "boolean",
         description: "Skip the local SQLite cache and fetch fresh Tavily results.",
       },
+      chateau: { type: "string", description: "Optional château focus for cache/query scoping." },
       regionId: { type: "string", description: "Legacy region id input, e.g. 'bordeaux-medoc'." },
-      query: { type: "string", description: "Legacy optional refinement (unused by harness)." },
+      query: { type: "string", description: "Optional refinement appended to generated Tavily queries." },
     },
     required: [],
   },
@@ -680,7 +687,10 @@ export const tavilyAgent: SubAgent<TavilyInput, TavilySignals> = {
       startYear,
       endYear,
       maxResultsPerQuery: input.maxResultsPerQuery,
+      forceRefresh: input.forceRefresh,
+      chateau: input.chateau ?? ctx.chateau,
       regionId,
+      query: input.query,
     };
 
     if (isDemoMode) {

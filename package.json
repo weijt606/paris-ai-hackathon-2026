@@ -18,7 +18,8 @@
     "format:check": "prettier --check .",
     "check:env": "tsx scripts/check-env.ts",
     "test:geo": "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' tsx scripts/test-geo-agent.ts",
-    "test:weather": "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' tsx scripts/test-weather-agent.ts"
+    "test:weather": "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' tsx scripts/test-weather-agent.ts",
+    "export:tavily-cache": "tsx scripts/export-tavily-cache.ts"
   },
   "dependencies": {
     "clsx": "^2.1.1",
