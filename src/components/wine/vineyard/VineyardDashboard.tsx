@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useT } from "@/lib/i18n/Provider";
+import { ExecutiveSummary } from "@/components/wine/ExecutiveSummary";
 import { RegionPicker } from "@/components/wine/RegionPicker";
 import { RiskCard } from "@/components/wine/RiskCard";
 import { UploadArea } from "@/components/wine/vineyard/UploadArea";
@@ -59,8 +60,15 @@ export function VineyardDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2 print:hidden">
-          <ExportButton />
-          <SubscribeDialog regionId={region.id} persona="vineyard" />
+          <ExportButton
+            reportMarkdown={result?.feature?.reportMarkdown}
+            filename={`wine-signals-${region.id}.md`}
+          />
+          <SubscribeDialog
+            regionId={region.id}
+            persona="vineyard"
+            digestPreview={result?.feature?.emailDigest}
+          />
         </div>
       </header>
 
@@ -107,6 +115,9 @@ export function VineyardDashboard() {
         <section className="space-y-8">
           {result ? (
             <>
+              {result.feature?.executiveSummary && (
+                <ExecutiveSummary text={result.feature.executiveSummary} />
+              )}
               <RiskCard result={result} />
               <DriverDonutChart drivers={result.drivers} />
               <WeatherLineChart regionId={result.region.id} />

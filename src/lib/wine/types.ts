@@ -67,6 +67,15 @@ export interface AgentStepTrace {
   summary?: string;
 }
 
+export interface FeatureSummary {
+  /** 2-sentence summary surfaced above the risk card. */
+  executiveSummary: string;
+  /** One-page markdown report (downloadable). */
+  reportMarkdown: string;
+  /** Short markdown digest used as the email-subscription preview. */
+  emailDigest: string;
+}
+
 export interface AnalyzeResult {
   region: AnalyzeInput["region"];
   timeframe: Timeframe;
@@ -75,6 +84,14 @@ export interface AnalyzeResult {
   riskBand: RiskBand;
   drivers: RiskDriver[];
   recommendations: Recommendation[];
+  /** Underlying vintage quality band from extraction (Great → Poor). */
+  qualityBand?: "Great" | "Excellent" | "Good" | "Average" | "Poor";
+  /** IDs of hard event gates the extraction agent identified as active. */
+  activeGates?: string[];
+  /** Optional rationale string from extraction. */
+  rationale?: string;
+  /** Feature-agent output for dashboard summary / report / subscription. */
+  feature?: FeatureSummary | null;
   /** Step-by-step trace shown in the dashboard for transparency. */
   trace: AgentStepTrace[];
   generatedAt: string;
