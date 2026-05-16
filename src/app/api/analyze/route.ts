@@ -16,6 +16,7 @@ const Body = z.object({
     end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   }),
   persona: z.enum(["vineyard", "trade"]),
+  tradePersona: z.enum(["merchant", "restaurant", "wineshop"]).optional(),
   question: z.string().max(500).optional(),
   chateau: z.string().max(120).optional(),
   uploads: z

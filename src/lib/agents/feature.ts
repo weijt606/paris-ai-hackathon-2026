@@ -1,9 +1,9 @@
 import "server-only";
-import { env, integrations, isDemoMode, sponsors } from "@/lib/env";
+import { integrations, isDemoFast, isDemoMode, openaiModelForAgents, sponsors } from "@/lib/env";
 import { openaiClient } from "@/lib/ai/openai";
 import { pioneerChat } from "@/lib/training/pioneer";
 import type { SubAgent } from "@/lib/agents/types";
-import type { FeatureSummary, Persona } from "@/lib/wine/types";
+import type { FeatureSummary, Persona, TradePersona } from "@/lib/wine/types";
 
 /**
  * Feature agent — receives the extraction agent's evaluation and produces
@@ -28,6 +28,8 @@ import type { FeatureSummary, Persona } from "@/lib/wine/types";
 export interface FeatureInput {
   regionId: string;
   persona: Persona;
+  /** Trade sub-persona — only set when persona === "trade". */
+  tradePersona?: TradePersona;
   /** Risk score from extraction (0–100, higher = worse outlook). */
   score: number;
   /** Vintage quality band from extraction (Great → Poor). */
@@ -93,10 +95,21 @@ const OPENAI_RESPONSE_SCHEMA = {
   },
 } as const;
 
+function tradePersonaTone(tp: TradePersona): string {
+  if (tp === "merchant")
+    return "Trade sub-persona: MERCHANT (en-primeur/négociant). Frame the report and digest around allocation decisions, price-volatility, and age-worthiness. Recommendations target en-primeur participation, allocation sizing, and cross-vintage hedging.";
+  if (tp === "restaurant")
+    return "Trade sub-persona: RESTAURANT (sommelier). Frame the report and digest around list-refresh cadence, by-the-glass viability, vintage-variation tolerance, and food-pairing flexibility. Avoid cellar/age-worthiness framing.";
+  return "Trade sub-persona: WINESHOP (retail / supermarket). Frame the report and digest around retail volume, mainstream consumer appeal, supply predictability, and price-tier diversity. Avoid prestige/critic-score framing.";
+}
+
 function buildUserMessage(input: FeatureInput): string {
   return [
     `Region id: ${input.regionId}`,
     `Persona: ${input.persona}`,
+    input.persona === "trade" && input.tradePersona
+      ? tradePersonaTone(input.tradePersona)
+      : "",
     `Risk score: ${input.score}/100`,
     input.qualityBand && `Quality band: ${input.qualityBand}`,
     input.driversSummary && `Drivers: ${input.driversSummary}`,
@@ -200,7 +213,7 @@ async function tryOpenAI(input: FeatureInput, signal: AbortSignal): Promise<Feat
     const client = openaiClient();
     const res = await client.chat.completions.create(
       {
-        model: env.OPENAI_MODEL,
+        model: openaiModelForAgents(),
         messages: [
           { role: "system", content: OPENAI_SYSTEM_PROMPT },
           { role: "user", content: buildUserMessage(input) },
@@ -250,8 +263,16 @@ export const featureAgent: SubAgent<FeatureInput, FeatureOutput> = {
     required: ["regionId", "persona", "score"],
   },
 
-  async run(input, ctx) {
+  async run(rawInput, ctx) {
     const t0 = Date.now();
+    // ctx.tradePersona always wins over whatever the routing LLM may have
+    // (or may not have) populated, so the lens is consistent with the
+    // request that arrived at /api/analyze.
+    const input: FeatureInput = {
+      ...rawInput,
+      tradePersona:
+        ctx.persona === "trade" ? ctx.tradePersona ?? rawInput.tradePersona : undefined,
+    };
 
     if (isDemoMode) {
       return {
@@ -264,7 +285,12 @@ export const featureAgent: SubAgent<FeatureInput, FeatureOutput> = {
     }
 
     // tier 1 — Pioneer (preferred sponsor path)
-    const pioneer = await tryPioneer(input, ctx.signal);
+    // Demo-fast mode skips Pioneer entirely. Pioneer-hosted open models
+    // are the slowest single step in the pipeline (6-10 s warm), and on
+    // a tight ≤30 s demo budget the OpenAI tier-2 path (~3 s) beats it
+    // even though we lose the "narrative wrapping on a small open model"
+    // sponsor story.
+    const pioneer = isDemoFast ? null : await tryPioneer(input, ctx.signal);
     if (pioneer) {
       return {
         agent: "feature_agent",

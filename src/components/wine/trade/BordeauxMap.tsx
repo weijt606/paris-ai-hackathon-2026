@@ -111,13 +111,17 @@ export function BordeauxMap({ selectedChateau, onChateauSelect }: Props) {
 
   const chateauNorm = (selectedChateau ?? "").toLowerCase();
 
+  // Default view centred on the 1855-classed château cluster (Left Bank
+  // axis: Saint-Estèphe → Pauillac → Saint-Julien → Margaux → Pessac).
+  // Zoom 10 fits the whole Left Bank with Saint-Émilion just off the
+  // eastern edge — close enough that individual communes are legible.
   const mapBody = (
     <MapContainer
       ref={(m) => {
         mapRef.current = m ?? null;
       }}
-      center={[45.05, -0.7]}
-      zoom={9}
+      center={[45.0, -0.6]}
+      zoom={10}
       minZoom={7}
       maxZoom={14}
       scrollWheelZoom
@@ -285,7 +289,7 @@ export function BordeauxMap({ selectedChateau, onChateauSelect }: Props) {
 
       <div className="mb-3">{searchBar}</div>
 
-      <div className="aspect-[5/4] w-full overflow-hidden rounded-md border bg-muted/30">
+      <div className="h-[420px] w-full overflow-hidden rounded-md border bg-muted/30 md:h-[520px]">
         {mapBody}
       </div>
 

@@ -4,6 +4,7 @@ import type {
   Persona,
   Region,
   Timeframe,
+  TradePersona,
   UploadMeta,
 } from "@/lib/wine/types";
 
@@ -33,6 +34,12 @@ export interface AgentContext {
    * wins over inferred routing.
    */
   chateau?: string;
+  /**
+   * Trade sub-persona (merchant / restaurant / wineshop). Only meaningful
+   * when persona === "trade". extraction + feature read this to bias their
+   * driver weighting and prose toward the relevant lens.
+   */
+  tradePersona?: TradePersona;
   /**
    * True when the requested timeframe is entirely in the past. backtest_agent
    * only fires when this is set, comparing the predicted score against real

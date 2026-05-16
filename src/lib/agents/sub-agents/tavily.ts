@@ -1,5 +1,5 @@
 import "server-only";
-import { env, integrations, isDemoMode } from "@/lib/env";
+import { env, integrations, isDemoFast, isDemoMode } from "@/lib/env";
 import type { AgentContext, SubAgent } from "@/lib/agents/types";
 import { findRegion } from "@/lib/wine/regions";
 import {
@@ -128,7 +128,10 @@ type TavilySearchResponse = {
 
 const MAX_QUERY_COUNT = 200;
 const MAX_YEAR_SPAN = 16;
-const DEFAULT_MAX_RESULTS_PER_QUERY = 5;
+// Demo-fast caps the per-query result count to 3 so each Tavily POST returns
+// faster and the downstream LLM payload is smaller (each result ships its
+// full content snippet to extraction/backtest).
+const DEFAULT_MAX_RESULTS_PER_QUERY = isDemoFast ? 3 : 5;
 const MIN_TAVILY_SCORE = 0.2;
 const REQUEST_TIMEOUT_MS = 8000;
 const MAX_RETRIES = 1;

@@ -1,0 +1,345 @@
+# 🍇 Wine Intelligence Agents — Architecture Guide
+
+This repo ships a **wine vintage-quality and risk intelligence** product for
+French Burgundy + Bordeaux, with a dual-persona surface (vineyard operator /
+trade buyer). This document covers the **agent architecture**, **file
+ownership**, and the **SubAgent contract** every external API call sits
+behind.
+
+> General scaffold info (env, dev loop, demo mode) lives in [`DEVELOPMENT.md`](DEVELOPMENT.md).
+> Sponsor adapter details (OpenAI / Tavily / Pioneer.ai) live in [`SPONSORS.md`](SPONSORS.md).
+> This file is just the agent layer.
+
+---
+
+## 1. System architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  /                — EntryChoice (vineyard / trade) + EN/FR locale   │
+├─────────────────────────────────────────────────────────────────────┤
+│  /vineyard                                  /trade                   │
+│   • Region + Timeframe picker                 • Timeframe picker     │
+│   • UploadArea (drag-drop, metadata-only)     • Wide Bordeaux map    │
+│   • Optional focus-question textarea            (61 châteaux × 1855) │
+│   • Bordeaux map (shared component)           • Run + 7-card cascade │
+│   • Run + 6-card progressive cascade          • Export + Subscribe   │
+└────────────────────────┬────────────────────────────────────────────┘
+                         │ POST /api/analyze
+                         ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  Orchestrator  (src/lib/agents/orchestrator.ts)                     │
+│   OpenAI Chat Completions tool-use loop · routing only · do NOT edit│
+│   • Registers every SubAgent → OpenAI function tool                 │
+│   • Dispatches tool_calls → runAgentSafely → collects trace[]       │
+│   • In-memory cache (30 min TTL, 64 LRU) keyed on (region · persona │
+│     · timeframe · question · chateau · upload-meta)                 │
+│   • Auto-detects backtest mode when timeframe.end < today           │
+│   • Harvests extraction + feature + geo + backtest into AnalyzeResult│
+└────────────────────────┬────────────────────────────────────────────┘
+                         │ parallel calls
+       ┌─────────────────┼─────────────────┐
+       ▼                 ▼                 ▼
+ weather_agent      geo_agent        tavily_agent
+ (climate signals)  (terroir + AOC)  (public-web grounding)
+       │                 │                 │
+       └─────────────────┼─────────────────┘
+                         ▼
+                 extraction_agent          ← vintage-quality scoring
+                 (28 features, 11 gates,      via OpenAI strict
+                  → quality 0-100 →            json_schema; risk = 100 - quality)
+                  risk inverted)
+                         │
+                         ▼
+                  feature_agent            ← exec summary, report,
+                  3-tier:                    email digest
+                  1. Pioneer (small open    (Pioneer-hosted is the
+                     OSS LLM)                 primary; OpenAI is the
+                  2. OpenAI structured       fallback for strict schema)
+                  3. Deterministic template
+                         │
+                         ▼ (only if timeframe is historical)
+                  backtest_agent           ← verifies prediction against
+                  Tavily critic + OpenAI     historical critic + market
+                  comparison                 signals (Decanter, etc.)
+```
+
+**Principles:**
+- Orchestrator is a router. Sub-agents do the work; the orchestrator never
+  embeds business logic.
+- Sub-agents have **no inter-dependencies**. Each can be developed and tested
+  in isolation.
+- Each sub-agent is one file with one `run()` body. Swap the body, keep the
+  contract — downstream stays intact.
+
+---
+
+## 2. File map
+
+| File | Purpose | Status |
+|---|---|---|
+| `src/lib/agents/orchestrator.ts` | OpenAI tool-use routing + cache | ✅ stable — do not edit |
+| `src/lib/agents/types.ts` | `SubAgent`, `AgentResult`, `AgentContext` | ✅ stable — do not edit |
+| `src/lib/agents/sub-agents/weather.ts` | ERA5 1990-2024 + NASA POWER 2025 + SEAS5 2026 + DEM downscaling | ✅ wired |
+| `src/lib/agents/sub-agents/geo.ts` | 61-château 1855 dataset, microtopo, AOC envelope | ✅ wired |
+| `src/lib/agents/sub-agents/tavily.ts` | 5-source-type public-web harness | ✅ wired |
+| `src/lib/agents/sub-agents/tavily-cache.ts` | SQLite (`node:sqlite`) 7-day result cache | ✅ wired |
+| `src/lib/agents/sub-agents/backtest.ts` | Critic retrieval + verdict comparison | ✅ wired |
+| `src/lib/agents/extraction.ts` | Vintage-quality schema scoring (28 features × 6 gates × 11 adjustments) | ✅ wired |
+| `src/lib/agents/feature.ts` | 3-tier narrative generator (Pioneer → OpenAI → template) | ✅ wired |
+| `src/lib/training/pioneer.ts` | Pioneer.ai chat-completions adapter | ✅ wired |
+| `src/lib/ai/openai.ts` | OpenAI client + helpers | ✅ wired |
+| `src/lib/wine/types.ts` | `AnalyzeInput` / `AnalyzeResult` / drivers / backtest / geoSnapshot | ✅ shared FE+BE |
+| `src/lib/wine/regions.ts` | Burgundy + Bordeaux static region list | ✅ wired |
+| `src/app/api/analyze/route.ts` | POST entry point with zod validation | ✅ stable |
+| `src/components/wine/*` | Dashboard UI (top-down layout, Run modal, progressive reveal) | ✅ wired |
+| `src/lib/demo/fixtures.ts` | Demo-mode fixtures (H3 contract) | ✅ wired |
+
+---
+
+## 3. SubAgent contract
+
+Every external integration sits behind this interface (`src/lib/agents/types.ts`):
+
+```ts
+export interface SubAgent<TInput, TData> {
+  name: string;              // snake_case, unique — used as OpenAI tool name
+  description: string;       // tells OpenAI WHEN to call this — be specific
+  input_schema: JsonSchema;  // OpenAI fills params against this schema
+  run(input: TInput, ctx: AgentContext): Promise<AgentResult<TData>>;
+}
+```
+
+**The orchestrator's guarantees:**
+- Sub-agents never call each other. The OpenAI tool-use loop decides ordering.
+- One sub-agent throwing does not crash the loop (`runAgentSafely` wraps with
+  try/catch).
+- `ctx.signal: AbortSignal` fires on request cancel / timeout. Long-running
+  fetches should honor it.
+- `ctx.chateau`, `ctx.uploads`, `ctx.isBacktest`, `ctx.vintageYear` are
+  populated from the request when present — sub-agents may read but should
+  not assume.
+
+**Every sub-agent must:**
+- ✅ Always resolve. Never reject. Errors surface as `{ ok: false, error: "..." }`.
+- ✅ Return `data` matching the declared `TData`. Extraction reads it by shape.
+- ✅ Keep `input_schema` accurate. OpenAI uses description + schema to decide.
+- ❌ Never call OpenAI for "the main decision" — that's the orchestrator's job.
+- ❌ Never edit `orchestrator.ts` to add a special branch — fix the contract instead.
+
+---
+
+## 4. Sub-agent state of the art (what each one actually does today)
+
+### `weather_agent` — `src/lib/agents/sub-agents/weather.ts`
+
+- **Historical**: ERA5 reanalysis (Open-Meteo Archive) for 1990-2024 daily series
+  at 61 château centroids, with DEM-based downscaling (lapse rate + TPI +
+  Gironde-buffer).
+- **2025 backfill**: NASA POWER (MERRA-2 + AG community), with explicit source
+  disclosure in the agent's `notes[]`.
+- **2026 forecast**: ECMWF SEAS5 seasonal ensemble (vintage granularity).
+- **Outputs** (`WeatherSignals`): `metrics[]` keyed to the vintage schema
+  (`gst_growing_season`, `harvest_rain`, `flowering_rain`, `heat_days_ge_35`,
+  `cool_nights`, `frost_days_apr`, …), plus a prose `summary` and per-segment
+  `notes[]`.
+
+### `geo_agent` — `src/lib/agents/sub-agents/geo.ts`
+
+- **Dataset**: 61 1855-classed Bordeaux châteaux joined on `chateaux.csv` +
+  `static_geo.csv` + `microtopo.csv` (commune, lat/lon, elevation, distance to
+  Gironde, slope/aspect/TPI).
+- **AOC envelope**: returns the AOC parent, classification (1er Cru → 5e Cru
+  Classé), and parcel-scale microtopography when `ctx.chateau` is set.
+- **Output** (`GeoSnapshot`): both the static dataset row and a brief terroir
+  interpretation usable by the UI's `TerroirCard`.
+
+### `tavily_agent` — `src/lib/agents/sub-agents/tavily.ts` (+ `tavily-cache.ts`)
+
+- **Harness**: 5 source types — `producer_official`, `regulator_or_inao`,
+  `wine_media_premium`, `wine_media_general`, `forums_or_communities` — each
+  with a trusted-domain allow-list and per-type weighting.
+- **Cache**: 7-day TTL via `node:sqlite`, keyed on a SHA-256 of the query
+  + filters. Misses go to Tavily Search; hits return instantly.
+- **Output**: ranked `hits[]` with `url`, `title`, `published_date`, `score`,
+  `source_type`, `summary`. Consumed by `extraction_agent` and re-used by
+  `backtest_agent` for critic retrieval.
+
+### `backtest_agent` — `src/lib/agents/sub-agents/backtest.ts`
+
+- **When**: orchestrator auto-detects `timeframe.end < today` and runs this
+  agent **after** extraction.
+- **What**: calls `runTavilyHarness()` for the vintage year (e.g. "Lafite
+  Rothschild 2010 vintage review"), passes top hits to OpenAI with a strict
+  `json_schema` that emits `critics[]` (source, score, scale, quote, url),
+  `marketSignals`, and a `verdict` of `confirms` / `partial` / `contradicts`
+  against the prediction.
+- **Output** (`BacktestSnapshot`): used by `BacktestCard` to render the
+  side-by-side predicted-vs-actual block.
+
+### `extraction_agent` — `src/lib/agents/extraction.ts`
+
+- **Input**: pooled outputs from weather + geo + tavily, plus the original
+  `AnalyzeInput`.
+- **Engine**: OpenAI strict `json_schema` mode against the 1150-line vintage
+  quality schema — 28 features, 6 hard event gates (frost wipeout, hail,
+  catastrophic harvest rain, etc.), 11 dynamic adjustments. Falls back to a
+  deterministic heuristic on OpenAI failure (returns `ok: true` with the
+  heuristic data so the rest of the pipeline keeps flowing).
+- **Inversion**: schema computes `quality ∈ [0,100]`; the agent emits
+  `risk = 100 - quality` to keep the dashboard's existing "lower risk is
+  better" semantics.
+- **Output**: `score`, `riskBand`, `qualityBand`, `activeGates[]`, `rationale`,
+  `drivers[]` (with `source`, `signal`, `weight`), `recommendations[]`.
+
+### `feature_agent` — `src/lib/agents/feature.ts`
+
+- **Tier 1**: Pioneer-hosted open-source LLM (Qwen / GLM / Llama 7-8B class)
+  with `response_format: json_object`. Fast + cheap "wrapping" of the
+  extraction numbers into prose. Returns `null` on any failure.
+- **Tier 2**: OpenAI structured output (strict `json_schema`) as fallback.
+- **Tier 3**: deterministic template assembled from extraction's output
+  (always succeeds).
+- **Output** (`FeatureOutput`): `executiveSummary`, `reportMarkdown`,
+  `emailDigest`. Consumed by the `ExecutiveSummary` UI card, the export
+  button, and the subscribe dialog.
+
+---
+
+## 5. API contract (frontend ↔ backend)
+
+### `POST /api/analyze`
+
+**Request:**
+```json
+{
+  "region":    { "id": "burgundy-cote-de-nuits", "name": "Côte de Nuits", "parent": "burgundy" },
+  "timeframe": { "start": "2026-05-16", "end": "2026-08-14" },
+  "persona":   "vineyard",
+  "question":  "focus on frost risk in April",
+  "chateau":   "Château Lafite Rothschild",
+  "uploads":   [{ "name": "harvest_report.pdf", "size": 184320, "mime": "application/pdf" }]
+}
+```
+
+**Response (200):**
+```ts
+interface AnalyzeResult {
+  region: { id: string; name: string; parent: "burgundy" | "bordeaux" };
+  timeframe: { start: string; end: string };
+  persona: "vineyard" | "trade";
+  riskScore: number;                  // 0-100
+  riskBand: "low" | "moderate" | "elevated" | "high";
+  qualityBand: "exceptional" | "excellent" | "very_good" | "good" | "average" | "poor";
+  activeGates: string[];              // schema gates that fired
+  rationale: string;
+  drivers: Array<{ source: "weather"|"geo"|"tavily"|"extraction"; signal: string; weight: number }>;
+  recommendations: Array<{ persona: "vineyard"|"trade"; action: string; evidence?: string }>;
+  feature?: {                         // present whenever feature_agent ran
+    executiveSummary: string;
+    reportMarkdown: string;
+    emailDigest: string;
+  };
+  geoSnapshot?: GeoSnapshot;          // present when chateau is set OR region has static data
+  backtest?: BacktestSnapshot;        // present when timeframe.end < today
+  trace: Array<{ agent: string; ok: boolean; durationMs: number; summary?: string; error?: string }>;
+  generatedAt: string;                // ISO
+  isDemoOrPartial: boolean;           // true if demo / missing key / sub-agent failure
+}
+```
+
+**Errors:**
+- `400` — zod validation failed (malformed body).
+- `503` — `SponsorUnavailableError` (a critical sponsor key is missing).
+- `500` — other throws.
+
+Types live in `src/lib/wine/types.ts` and are imported by **both** server
+and client (no `server-only` imports inside).
+
+---
+
+## 6. Demo mode
+
+`NEXT_PUBLIC_DEMO_MODE=true` short-circuits the entire pipeline:
+
+- The orchestrator returns `demoWineAnalysis(input)` directly — no OpenAI,
+  no Tavily, no Pioneer, no sub-agent dispatch.
+- Each sub-agent **should also** check `isDemoMode` at the top of `run()` and
+  return its own fixture (so unit tests can exercise the agent in isolation).
+- The fixture set covers well-known vintages (2010 / 2013 / 2015 / 2020) so
+  backtest mode has plausible output offline.
+
+**Why it matters:** sponsor APIs can rate-limit or fail at the worst possible
+moment (live demo). Demo mode is the rehearsal contract — H3 in `CLAUDE.md`.
+Every new external call must add a fixture branch.
+
+**Testing demo mode:**
+```bash
+NEXT_PUBLIC_DEMO_MODE=true pnpm dev
+# Visit http://localhost:3000 → Run analysis → verify isDemoOrPartial: true
+```
+
+---
+
+## 7. Caching layers
+
+Two independent caches keep the live system snappy:
+
+1. **Orchestrator cache** (`src/lib/agents/orchestrator.ts`)
+   In-memory `Map`, 30-min TTL, 64-entry LRU, keyed on
+   `(region, persona, timeframe, question, chateau, upload-meta-hash)`.
+   Skips the entire tool-use loop on a hit. Cleared on process restart.
+
+2. **Tavily cache** (`src/lib/agents/sub-agents/tavily-cache.ts`)
+   SQLite (`node:sqlite`), 7-day TTL, keyed on a SHA-256 of the search
+   query + filters. Survives process restarts.
+
+Neither cache is touched on demo mode (demo path short-circuits before
+they're consulted).
+
+---
+
+## 8. Co-ordination + PR checklist
+
+- **Branch strategy**: feature branches off `main`. Sub-agent work happens on
+  `agent/<name>`; integration on `feat/integrate-sub-agents`.
+- **Branch names are ASCII**: never Chinese / non-ASCII characters — GitHub
+  flags them.
+- **PR title** style: `feat(agent): wire weather_agent to ERA5 + SEAS5`.
+- **Every PR includes**:
+  - real implementation (no leftover stub body)
+  - demo fixture branch when introducing a new external call
+  - `pnpm typecheck` clean
+  - `pnpm lint` clean
+  - one `curl /api/analyze` proof in the PR description (trace row `ok: true`)
+
+- **Do not touch** without an issue:
+  - `orchestrator.ts`
+  - `types.ts` (SubAgent contract)
+  - `analyze/route.ts` (API surface)
+
+- **Free to extend**:
+  - `regions.ts` — more regions
+  - `components/wine/*` — UI iteration
+  - `fixtures.ts` — richer demo data
+
+- **Commit hygiene**:
+  - Honor H1 (no secrets / PII in commits) — run `git diff --cached` and scan.
+  - Honor H5 (no `Co-Authored-By: Claude` trailer in this repo).
+
+---
+
+## 9. Quick reference
+
+| Question | Where |
+|---|---|
+| Which file do I own? | §2 file map |
+| What contract do I satisfy? | §3 SubAgent contract |
+| What does sub-agent X already do? | §4 state of the art |
+| What's the API response shape? | §5 |
+| How do I test offline? | §6 demo mode |
+| Why is this slow on a cold call? | §7 — first call misses both caches |
+| What goes in a PR? | §8 |
+| How are OpenAI / Tavily / Pioneer wired? | [`SPONSORS.md`](SPONSORS.md) |
+
+Questions → open an issue or a draft PR. Don't block on chat.

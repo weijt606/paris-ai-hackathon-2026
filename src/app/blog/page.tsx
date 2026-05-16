@@ -37,7 +37,11 @@ const FAQ: QA[] = [
   },
   {
     q: "Why both an OpenAI extraction and a Pioneer feature agent?",
-    a: "extraction needs to reason against a 5K-token schema and emit strict JSON with bounded fields — well-suited to a larger reasoning-capable model. feature is short-form packaging (2-sentence summary, 250-word report, 5-line digest) where a smaller, faster open-source model (Pioneer-hosted Qwen / Llama / GLM 7-8B class) is sufficient and cheaper. Pioneer is the preferred tier; OpenAI is the tier-2 fallback; a deterministic template is tier-3 so the dashboard never blanks.",
+    a: "extraction emits strict JSON against a 5K-token schema — a deterministic structured-output task. We use OpenAI gpt-4o-mini for it (recommended over reasoning models like gpt-5* / o-series, which would take 20-40s per call without quality gain). feature is short-form packaging (2-sentence summary, 250-word report, 5-line digest) where a Pioneer-hosted 7-8B open-source model (Qwen / Llama / GLM class) is sufficient, cheaper, and bakes a path for domain fine-tuning. Pioneer is the preferred tier; OpenAI is the tier-2 fallback; a deterministic template is tier-3 so the dashboard never blanks.",
+  },
+  {
+    q: "Which OpenAI model should OPENAI_MODEL point to?",
+    a: "gpt-4o-mini. The orchestrator + extraction + backtest tasks are 'follow the schema, emit JSON' — no chain-of-thought reasoning required. gpt-4o-mini does each call in 3-6s; reasoning models (gpt-5*, o-series) do 20-40s of internal thinking with no quality improvement on these structured tasks, and they reject custom temperature. The orchestrator-level result cache absorbs repeat runs, so first-call latency is the actual demo bottleneck — that's where the model choice matters.",
   },
   {
     q: "What's backtest mode?",
@@ -82,10 +86,22 @@ const STAGES: StageBox[] = [
     source: "src/lib/agents/orchestrator.ts",
   },
   {
-    index: "3",
-    title: "Sub-agents (parallel)",
-    body: "weather (ERA5 + SEAS5), geo (61-château 1855 dataset), tavily (5-channel Bordeaux harness with SQLite cache).",
-    source: "src/lib/agents/sub-agents/{weather,geo,tavily}.ts",
+    index: "3a",
+    title: "weather_agent — climate signals",
+    body: "Reads DEM-downscaled ERA5 (1990–2024 historicals) plus the ECMWF SEAS5 ensemble (2026 seasonal forecast) from bundled CSVs. Returns GST, harvest rain, heat-stress days, frost days, winter rain, diurnal range, and derived Huglin / cool-night indices. Pass a château name for a single-site read; coverage is the 61 left-bank 1855-classed growths.",
+    source: "src/lib/agents/sub-agents/weather.ts · src/lib/wine/climate.ts",
+  },
+  {
+    index: "3b",
+    title: "geo_agent — terroir context",
+    body: "Joins three bundled CSVs (chateaux geocodes / static_geo features / microtopo TPI) on château name. Returns elevation, distance to Gironde + Atlantic, TPI cold-air-pooling signal, slope + aspect, soil clay/sand/silt %, and AOC mix per region. Drives the Terroir card and explains the 'why' behind weather signals.",
+    source: "src/lib/agents/sub-agents/geo.ts · src/lib/wine/chateaux.ts",
+  },
+  {
+    index: "3c",
+    title: "tavily_agent — public-web grounding",
+    body: "Bordeaux-focused harness across five source channels (sentiment / policy / regulation / winemaker / market) with trusted-domain weighting (INAO, agriculture.gouv.fr, Decanter, Jancis Robinson, Wine-Searcher…), URL dedupe, and quality filter. A SQLite cache (node:sqlite, 7-day TTL) survives across requests so repeat queries hit local storage instead of the Tavily API.",
+    source: "src/lib/agents/sub-agents/tavily.ts · src/lib/agents/sub-agents/tavily-cache.ts",
   },
   {
     index: "4",
@@ -150,35 +166,6 @@ export default function BlogPage() {
           ))}
         </ol>
 
-        <pre className="mt-8 overflow-x-auto rounded-md border bg-card p-5 text-[10px] leading-relaxed text-muted-foreground">
-{`POST /api/analyze
-        │
-        ▼
-   ┌─────────────┐
-   │ ORCHESTRATOR│  OpenAI tool-use loop
-   └─┬─────┬─────┘
-     │     │     │
-  ┌──▼┐ ┌──▼┐ ┌──▼┐
-  │WTH│ │GEO│ │TAV│   parallel
-  └──┬┘ └──┬┘ └──┬┘
-     └─────┼─────┘
-           ▼
-     ┌──────────┐  ╌╌╌╌╌  ┌────────┐
-     │EXTRACTION│         │ Schema │
-     └────┬─────┘         │ 28×6×11│
-          ▼               └────────┘
-     ┌──────────┐  ╌╌╌╌╌  ┌────────┐
-     │ FEATURE  │ ───tool ▶│PIONEER │
-     └────┬─────┘         └────────┘
-          ▼  (isBacktest only)
-     ┌──────────┐
-     │ BACKTEST │ ─ Tavily critic retrieval
-     └────┬─────┘
-          ▼
-     ┌──────────┐
-     │ DASHBOARD│
-     └──────────┘`}
-        </pre>
       </section>
 
       <section className="mb-12">
