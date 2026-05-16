@@ -156,9 +156,9 @@ The system is a pipeline of OpenAI-driven agents wired by a single tool-use loop
 │ 4. EXTRACTION — src/lib/agents/extraction.ts                                    │
 │    Driven by OpenAI Chat Completions · response_format: json_schema (strict)    │
 │                                                                                 │
-│    System prompt = data/wine-vintage-quality-schema.json (1150-line scoring   │
-│    model: 28 features × 6 hard event gates × 11 dynamic adjustments, plus      │
-│    tavilyAgentFeatureContract for external/market signals integration).        │
+│    System prompt = data/wine-vintage-quality-schema.json (1150-line scoring     │
+│    model: 28 features × 6 hard event gates × 11 dynamic adjustments, plus       │
+│    tavilyAgentFeatureContract for external/market signals integration).         │
 │                                                                                 │
 │    Input (from GPT tool-call):                                                  │
 │      • regionId · persona                                                       │
@@ -192,7 +192,7 @@ The system is a pipeline of OpenAI-driven agents wired by a single tool-use loop
 │                                                                                 │
 │      ┌─────────────────────────────────────┐                                    │
 │      │ tier 1 — Pioneer.ai (preferred)     │                                    │
-│      │ src/lib/training/pioneer.ts          │                                    │
+│      │ src/lib/training/pioneer.ts         │                                    │
 │      │ OpenAI-compatible chat completions  │                                    │
 │      │ hosting smaller open-source LLM     │                                    │
 │      │ (Qwen / GLM / Llama 7-8B class).    │                                    │
@@ -243,12 +243,12 @@ The system is a pipeline of OpenAI-driven agents wired by a single tool-use loop
 │ 7. UI CONSUMPTION  —  Atlas 3-col shell (`AtlasShell`)                          │
 │                                                                                 │
 │  ┌──────────────────┬──────────────────────────────┬─────────────────────────┐  │
-│  │ left: list/sidebar│ centre: BordeauxMap          │ right: detail panel     │  │
-│  │ ChateauList /     │ 61 1855 classés × dark/light │ Chateau detail /        │  │
-│  │ Vineyard regions  │ tiles · click → flyTo        │ Vineyard controls       │  │
+│  │ left: list/sidebar│ centre: BordeauxMap          │ right: detail panel    │  │
+│  │ ChateauList /     │ 61 1855 classés × dark/light │ Chateau detail /       │  │
+│  │ Vineyard regions  │ tiles · click → flyTo        │ Vineyard controls      │  │
 │  └──────────────────┴──────────────────────────────┴─────────────────────────┘  │
 │           ▲                          ▲                         ▲                │
-│   selection ──────────► state lifted to dashboard ◄──── Run / Show last          │
+│   selection ──────────► state lifted to dashboard ◄──── Run / Show last         │
 │                                                                                 │
 │   During Run:  drawer overlays centre — WorkflowHero                            │
 │      headline rotates per active agent · elapsed / progress / active KV         │
