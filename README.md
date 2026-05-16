@@ -114,7 +114,7 @@ The system is a pipeline of OpenAI-driven agents wired by a single tool-use loop
 │                                                                                 │
 │      ┌─────────────────────────────────────┐                                    │
 │      │ tier 1 — Pioneer.ai (preferred)     │                                    │
-│      │ src/lib/training/pioneer.ts          │                                   │
+│      │ src/lib/training/pioneer.ts         │                                    │
 │      │ OpenAI-compatible chat completions  │                                    │
 │      │ hosting smaller open-source LLM     │                                    │
 │      │ (Qwen / GLM / Llama 7-8B class).    │                                    │
