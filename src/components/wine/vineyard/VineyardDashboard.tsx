@@ -5,6 +5,7 @@ import { useT } from "@/lib/i18n/Provider";
 import { ExecutiveSummary } from "@/components/wine/ExecutiveSummary";
 import { RegionPicker } from "@/components/wine/RegionPicker";
 import { RiskCard } from "@/components/wine/RiskCard";
+import { TerroirCard } from "@/components/wine/TerroirCard";
 import { UploadArea } from "@/components/wine/vineyard/UploadArea";
 import { DriverDonutChart } from "@/components/wine/charts/DriverDonutChart";
 import { WeatherLineChart } from "@/components/wine/charts/WeatherLineChart";
@@ -123,6 +124,7 @@ export function VineyardDashboard() {
                 <ExecutiveSummary text={result.feature.executiveSummary} />
               )}
               <RiskCard result={result} />
+              {result.geoSnapshot && <TerroirCard snapshot={result.geoSnapshot} />}
               <DriverDonutChart drivers={result.drivers} />
               <WeatherLineChart regionId={result.region.id} />
             </>
