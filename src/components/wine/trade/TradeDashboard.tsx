@@ -5,7 +5,7 @@ import { useT } from "@/lib/i18n/Provider";
 import { BordeauxMap } from "@/components/wine/trade/BordeauxMap";
 import { RiskCard } from "@/components/wine/RiskCard";
 import { SignalsList } from "@/components/wine/SignalsList";
-import { DriverBarChart } from "@/components/wine/charts/DriverBarChart";
+import { DriverDonutChart } from "@/components/wine/charts/DriverDonutChart";
 import { WeatherLineChart } from "@/components/wine/charts/WeatherLineChart";
 import { RegionalRiskChart } from "@/components/wine/charts/RegionalRiskChart";
 import { SentimentDonut } from "@/components/wine/charts/SentimentDonut";
@@ -108,7 +108,7 @@ export function TradeDashboard() {
             <>
               <RiskCard result={result} />
               <div className="grid gap-6 md:grid-cols-2">
-                <DriverBarChart drivers={result.drivers} />
+                <DriverDonutChart drivers={result.drivers} />
                 <WeatherLineChart regionId={result.region.id} />
                 <RegionalRiskChart selectedId={result.region.id} />
                 <SentimentDonut regionId={result.region.id} />

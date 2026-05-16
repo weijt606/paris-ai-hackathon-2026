@@ -6,7 +6,7 @@ import { RegionPicker } from "@/components/wine/RegionPicker";
 import { RiskCard } from "@/components/wine/RiskCard";
 import { SignalsList } from "@/components/wine/SignalsList";
 import { UploadArea } from "@/components/wine/vineyard/UploadArea";
-import { DriverBarChart } from "@/components/wine/charts/DriverBarChart";
+import { DriverDonutChart } from "@/components/wine/charts/DriverDonutChart";
 import { WeatherLineChart } from "@/components/wine/charts/WeatherLineChart";
 import { ExportButton } from "@/components/wine/shared/ExportButton";
 import { SubscribeDialog } from "@/components/wine/shared/SubscribeDialog";
@@ -126,7 +126,7 @@ export function VineyardDashboard() {
             <>
               <RiskCard result={result} />
               <div className="grid gap-6 md:grid-cols-2">
-                <DriverBarChart drivers={result.drivers} />
+                <DriverDonutChart drivers={result.drivers} />
                 <WeatherLineChart regionId={result.region.id} />
               </div>
               <div>
