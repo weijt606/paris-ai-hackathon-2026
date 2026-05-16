@@ -1,9 +1,27 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Script from "next/script";
 import { Cormorant_Garamond, Inter } from "next/font/google";
 import { I18nProvider } from "@/lib/i18n/Provider";
 import { LocaleSwitcher } from "@/components/i18n/LocaleSwitcher";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import "./globals.css";
+
+// Inline boot script — runs before React hydrates so the html class
+// reflects the stored / preferred theme on first paint and there is no
+// flash of the wrong theme. Reads localStorage first, falls back to
+// prefers-color-scheme, defaults to dark.
+const THEME_BOOT_SCRIPT = `
+  (function() {
+    try {
+      var stored = window.localStorage.getItem('wine-theme');
+      var theme = stored === 'light' || stored === 'dark'
+        ? stored
+        : (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+      document.documentElement.classList.toggle('dark', theme === 'dark');
+    } catch (e) {}
+  })();
+`;
 
 const sans = Inter({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
 const serif = Cormorant_Garamond({
@@ -26,6 +44,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`dark ${sans.variable} ${serif.variable}`}
       suppressHydrationWarning
     >
+      <head>
+        <Script
+          id="theme-boot"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }}
+        />
+      </head>
       <body className="min-h-screen bg-background font-sans text-foreground antialiased">
         <I18nProvider>
           <TopNav />
@@ -57,6 +82,7 @@ function TopNav() {
           <NavLink href="/trade">Trade</NavLink>
           <NavLink href="/blog">Blog</NavLink>
           <span className="mx-2 h-4 w-px bg-line" />
+          <ThemeToggle />
           <LocaleSwitcher />
         </div>
       </div>

@@ -8,7 +8,6 @@ import {
   TileLayer,
   useMap,
 } from "react-leaflet";
-import type { Map as LeafletMap } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
   getChateauList,
@@ -44,11 +43,20 @@ const CRU_LABEL: Record<number, string> = {
   5: "Cinquième",
 };
 
-/** Pan/zoom to a single match — used when filter narrows to exactly one. */
+/** Pan/zoom to a single target. Compares the previous coords by value so a
+ *  re-render with the same target doesn't re-fire the flyTo animation. */
 function FlyTo({ target }: { target: [number, number] | null }) {
   const map = useMap();
+  const lastRef = useRef<string | null>(null);
   useEffect(() => {
-    if (target) map.flyTo(target, 11, { duration: 0.5 });
+    if (!target) {
+      lastRef.current = null;
+      return;
+    }
+    const key = `${target[0]},${target[1]}`;
+    if (lastRef.current === key) return;
+    lastRef.current = key;
+    map.flyTo(target, 11, { duration: 0.5 });
   }, [target, map]);
   return null;
 }
@@ -62,7 +70,6 @@ export function BordeauxMap({
   showLegend = true,
 }: Props) {
   const chateaux = getChateauList();
-  const mapRef = useRef<LeafletMap | null>(null);
 
   const filtered = useMemo(() => {
     return chateaux.filter((c) => {
@@ -73,30 +80,26 @@ export function BordeauxMap({
     });
   }, [chateaux, query, growthFilter]);
 
-  const flyTarget: [number, number] | null =
-    filtered.length === 1 && query.length > 0
-      ? [filtered[0]!.lat, filtered[0]!.lon]
-      : null;
-
-  // When a chateau is selected externally, fly to it.
-  useEffect(() => {
-    if (!selectedChateau) return;
-    const match = chateaux.find((c) =>
-      c.name.toLowerCase().includes(selectedChateau.toLowerCase()),
-    );
-    if (match && mapRef.current) {
-      mapRef.current.flyTo([match.lat, match.lon], 11, { duration: 0.5 });
-    }
-  }, [selectedChateau, chateaux]);
-
   const chateauNorm = (selectedChateau ?? "").toLowerCase();
+
+  // Single source of truth for the map's fly-to target. Memoised so the
+  // reference is stable across re-renders for the same selection — that
+  // way the FlyTo effect fires once per actual change, not on every
+  // parent re-render. Selection wins over query single-match.
+  const flyTarget = useMemo<[number, number] | null>(() => {
+    if (chateauNorm.length > 0) {
+      const match = chateaux.find((c) => c.name.toLowerCase().includes(chateauNorm));
+      if (match) return [match.lat, match.lon];
+    }
+    if (filtered.length === 1 && query.length > 0) {
+      return [filtered[0]!.lat, filtered[0]!.lon];
+    }
+    return null;
+  }, [chateaux, chateauNorm, filtered, query]);
 
   return (
     <div className="relative h-full w-full">
       <MapContainer
-        ref={(m) => {
-          mapRef.current = m ?? null;
-        }}
         center={[45.05, -0.7]}
         zoom={9}
         minZoom={7}
