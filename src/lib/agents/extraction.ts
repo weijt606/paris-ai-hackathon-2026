@@ -200,6 +200,16 @@ export const extractionAgent: SubAgent<ExtractionInput, ExtractionOutput> = {
       };
     }
 
+    // Vineyard-uploaded documents arrive on ctx (direct entry — not routed
+    // through the GPT tool-use loop). Metadata only at this stage; future
+    // work parses content client-side and includes it here.
+    const uploads = ctx.uploads ?? [];
+    const uploadBlock = uploads.length > 0
+      ? `\n\nUSER-UPLOADED DOCUMENTS (direct entry from the vineyard, metadata only — content not yet parsed):\n${uploads
+          .map((u) => `  • ${u.name} (${(u.size / 1024).toFixed(1)} KB, ${u.mime})`)
+          .join("\n")}\nTreat these as evidence that operational data exists. Weight features they cover (yield, disease pressure, harvest timing, etc.) more confidently and acknowledge them in the rationale.`
+      : "";
+
     try {
       const client = openaiClient();
       const userMessage = [
@@ -208,6 +218,7 @@ export const extractionAgent: SubAgent<ExtractionInput, ExtractionOutput> = {
         input.weatherSignal && `Weather signals:\n${input.weatherSignal}`,
         input.geoSignal && `Geographical / terroir signals:\n${input.geoSignal}`,
         input.tavilySignal && `Public-web signals:\n${input.tavilySignal}`,
+        uploadBlock,
       ]
         .filter(Boolean)
         .join("\n\n");

@@ -113,9 +113,15 @@ export interface NodeDetail {
 interface Props {
   state: WorkflowState;
   details?: Partial<Record<NodeKey, NodeDetail>>;
+  /**
+   * Whether the user attached uploads on the vineyard side. When true, a
+   * dashed gold "uploads" edge is drawn from INPUT directly to EXTRACTION
+   * to represent the direct entry path (bypassing GPT routing).
+   */
+  hasUploads?: boolean;
 }
 
-export function WorkflowTrace({ state, details }: Props) {
+export function WorkflowTrace({ state, details, hasUploads = false }: Props) {
   const t = useT();
 
   const doneCount = (Object.values(state) as AgentState[]).filter(
@@ -175,6 +181,43 @@ export function WorkflowTrace({ state, details }: Props) {
         </defs>
 
         <rect x="0" y="0" width="200" height="192" fill="url(#wf-grid)" />
+
+        {/* Direct-entry "uploads" edge — bypasses GPT routing, INPUT → EXTRACTION.
+            Rendered only when the user attached files on the vineyard side. */}
+        {hasUploads && (
+          <g>
+            <path
+              d="M 55 14 C 8 30, 8 95, 43 110"
+              fill="none"
+              stroke="hsl(var(--chart-5))"
+              strokeWidth="0.7"
+              strokeDasharray="1.6 1.6"
+              strokeOpacity={state.extraction_agent === "running" ? 1 : 0.75}
+              markerEnd="url(#wf-arrow-active)"
+            >
+              {state.extraction_agent === "running" && (
+                <animate
+                  attributeName="stroke-dashoffset"
+                  from="0"
+                  to="-12"
+                  dur="1s"
+                  repeatCount="indefinite"
+                />
+              )}
+            </path>
+            <text
+              x="6"
+              y="62"
+              fontSize="3"
+              fill="hsl(var(--chart-5))"
+              textAnchor="middle"
+              transform="rotate(-90 6 62)"
+              style={{ letterSpacing: "0.16em", textTransform: "uppercase" }}
+            >
+              uploads
+            </text>
+          </g>
+        )}
 
         {/* Edges */}
         {EDGES.map((e, i) => {

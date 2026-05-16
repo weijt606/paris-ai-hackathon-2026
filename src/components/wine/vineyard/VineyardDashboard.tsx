@@ -109,7 +109,11 @@ export function VineyardDashboard() {
 
           {/* Agent workflow visualisation lives in the sidebar so the user
               sees the agents fire as soon as Run is clicked. */}
-          <WorkflowTrace state={workflowState} details={details} />
+          <WorkflowTrace
+            state={workflowState}
+            details={details}
+            hasUploads={uploads.length > 0}
+          />
         </aside>
 
         <section className="space-y-8">
