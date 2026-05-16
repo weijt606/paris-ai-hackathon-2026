@@ -21,16 +21,25 @@ const publicSchema = z.object({
   /**
    * Demo-fast mode — applies tight budgets aimed at keeping a full
    * /api/analyze call under 30 s for live demos. When true:
+   *   - Orchestrator bypasses the GPT tool-use loop and dispatches the
+   *     known agent flow directly (saves 5-7 GPT routing roundtrips)
+   *   - Pipeline restructured for max parallelism (tavily + extraction
+   *     overlap, feature + backtest overlap)
    *   - Tavily cache is pre-hydrated from data/tavily-cache-export.json
    *   - feature_agent skips Pioneer (tier 1) and goes straight to OpenAI
    *   - Tavily max_results_per_query is capped at 3
-   * Unlike NEXT_PUBLIC_DEMO_MODE, this still hits the real LLM and Tavily
-   * APIs — the pipeline just runs with smaller payloads on tighter timeouts.
+   *   - OpenAI model is pinned to gpt-4o-mini for all agent LLM calls
+   *
+   * Default is `true` — the GPT routing layer is overhead for our fixed
+   * agent flow and the speedup matters more than the (rarely-used)
+   * adaptive routing. Set NEXT_PUBLIC_DEMO_FAST=false explicitly if you
+   * need the legacy GPT-driven orchestration (e.g. to experiment with
+   * letting the LLM skip/reorder agents per user question).
    */
   NEXT_PUBLIC_DEMO_FAST: z
     .union([z.literal("true"), z.literal("false"), z.literal("")])
-    .default("false")
-    .transform((v) => v === "true"),
+    .default("true")
+    .transform((v) => v !== "false"),
   NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
 });
 

@@ -24,6 +24,16 @@ export const DICT = {
   "common.demo_mode": { fr: "Mode démo", en: "Demo mode" },
   "common.run_analysis": { fr: "Lancer l'analyse", en: "Run analysis" },
   "common.running": { fr: "En cours…", en: "Running…" },
+  "common.analysis_complete": { fr: "Analyse terminée", en: "Analysis complete" },
+  "common.view_report": { fr: "Voir le rapport", en: "View report" },
+  "common.report_ready_title": {
+    fr: "Le rapport est prêt",
+    en: "Your report is ready",
+  },
+  "common.report_ready_hint": {
+    fr: "Tous les agents ont terminé. Cliquez pour afficher les résultats détaillés.",
+    en: "All agents completed. Click to reveal the detailed results below.",
+  },
   "common.export_report": { fr: "Exporter le rapport", en: "Export report" },
   "common.subscribe": { fr: "S'abonner", en: "Subscribe" },
   "common.cancel": { fr: "Annuler", en: "Cancel" },
@@ -163,6 +173,23 @@ export const DICT = {
   "result.band.moderate": { fr: "Modéré", en: "Moderate" },
   "result.band.elevated": { fr: "Élevé", en: "Elevated" },
   "result.band.high": { fr: "Critique", en: "Critical" },
+  "result.band_reference": { fr: "Échelle de risque", en: "Risk band reference" },
+  "result.band.advice.low": {
+    fr: "Acheter avec confiance — millésime structurellement favorable.",
+    en: "Buy with confidence — vintage outlook is structurally favorable.",
+  },
+  "result.band.advice.moderate": {
+    fr: "Allocation sélective — certains signaux à surveiller.",
+    en: "Selective allocation — watch a few signals before committing.",
+  },
+  "result.band.advice.elevated": {
+    fr: "Réduire l'exposition — plusieurs risques convergent.",
+    en: "Reduce exposure — multiple risks converging on this vintage.",
+  },
+  "result.band.advice.high": {
+    fr: "Attendre, couvrir, ou s'abstenir — risques critiques actifs.",
+    en: "Wait, hedge, or sit out — critical risks active.",
+  },
   "result.drivers": { fr: "Facteurs", en: "Drivers" },
   "result.recommendations": { fr: "Recommandations", en: "Recommendations" },
   "result.trace": { fr: "Trace des agents", en: "Agent trace" },
@@ -173,6 +200,7 @@ export const DICT = {
 
   // ── feature ───────────────────────────────────────────────────────────
   "feature.summary.title": { fr: "Synthèse", en: "Executive summary" },
+  "feature.report.title": { fr: "Rapport complet", en: "Full report" },
   "terroir.title": { fr: "Terroir", en: "Terroir snapshot" },
   "feature.report.download": {
     fr: "Télécharger le rapport",

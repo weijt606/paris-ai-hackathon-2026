@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useT } from "@/lib/i18n/Provider";
 import { BacktestCard } from "@/components/wine/BacktestCard";
 import { ExecutiveSummary } from "@/components/wine/ExecutiveSummary";
+import { FullReportCard } from "@/components/wine/FullReportCard";
 import { RegionPicker } from "@/components/wine/RegionPicker";
 import { RiskCard } from "@/components/wine/RiskCard";
 import { TerroirCard } from "@/components/wine/TerroirCard";
@@ -48,9 +49,9 @@ function defaultTimeframe(): Timeframe {
  *   wineshop   — exec + risk + drivers + regional/sentiment (retail wants comparison)
  */
 const PERSONA_CARDS: Record<TradePersona, ReadonlySet<string>> = {
-  merchant: new Set(["executive", "backtest", "risk", "terroir", "drivers", "weather", "regional-sentiment"]),
-  restaurant: new Set(["executive", "backtest", "risk", "drivers"]),
-  wineshop: new Set(["executive", "risk", "drivers", "regional-sentiment"]),
+  merchant: new Set(["executive", "backtest", "risk", "terroir", "drivers", "weather", "regional-sentiment", "report"]),
+  restaurant: new Set(["executive", "backtest", "risk", "drivers", "report"]),
+  wineshop: new Set(["executive", "risk", "drivers", "regional-sentiment", "report"]),
 };
 
 export function TradeDashboard() {
@@ -63,9 +64,14 @@ export function TradeDashboard() {
   const [product, setProduct] = useState<Product | null>(null);
   const [timeframe, setTimeframe] = useState(defaultTimeframe);
   const [tradePersona, setTradePersona] = useState<TradePersona>("merchant");
+  // Whether the user has clicked "View report" since the last run. Drives
+  // the RunOverlay's lifecycle: it stays open in completion state until
+  // the user clicks through.
+  const [reportShown, setReportShown] = useState(true);
   const { workflowState, details, result, loading, error, run } = useAnalysisFlow();
 
   function handleRun() {
+    setReportShown(false);
     const body: AnalyzeInput = {
       region: { id: selected.id, name: selected.name, parent: selected.parent },
       timeframe,
@@ -99,6 +105,11 @@ export function TradeDashboard() {
     if (result.backtest)
       allCards.push({ id: "backtest", node: <BacktestCard backtest={result.backtest} /> });
     allCards.push({ id: "risk", node: <RiskCard result={result} /> });
+    if (result.feature?.reportMarkdown)
+      allCards.push({
+        id: "report",
+        node: <FullReportCard markdown={result.feature.reportMarkdown} />,
+      });
     if (result.geoSnapshot)
       allCards.push({ id: "terroir", node: <TerroirCard snapshot={result.geoSnapshot} /> });
     allCards.push({ id: "drivers", node: <DriverDonutChart drivers={result.drivers} /> });
@@ -234,11 +245,18 @@ export function TradeDashboard() {
         />
       </section>
 
-      {/* Run-time overlay */}
-      <RunOverlay open={loading} state={workflowState} details={details} />
+      {/* Run-time overlay — stays open in completion state until the user
+          clicks "View report". Hides itself after the click. */}
+      <RunOverlay
+        open={loading || (!!result && !reportShown)}
+        loading={loading}
+        state={workflowState}
+        details={details}
+        onContinue={() => setReportShown(true)}
+      />
 
       {/* Results — persona-filtered, progressive reveal cascade */}
-      {result ? (
+      {result && reportShown ? (
         <section className="space-y-8">
           {resultCards.map((card, i) => (
             <div
@@ -251,7 +269,7 @@ export function TradeDashboard() {
           ))}
         </section>
       ) : (
-        !loading && (
+        !loading && !result && (
           <section className="rounded-xl border border-dashed p-12 text-center animate-fade-in">
             <p className="text-sm text-muted-foreground">{t("trade.no_result")}</p>
           </section>

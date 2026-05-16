@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useT } from "@/lib/i18n/Provider";
 import { BacktestCard } from "@/components/wine/BacktestCard";
 import { ExecutiveSummary } from "@/components/wine/ExecutiveSummary";
+import { FullReportCard } from "@/components/wine/FullReportCard";
 import { RegionPicker } from "@/components/wine/RegionPicker";
 import { RiskCard } from "@/components/wine/RiskCard";
 import { TerroirCard } from "@/components/wine/TerroirCard";
@@ -46,9 +47,11 @@ export function VineyardDashboard() {
   const [timeframe, setTimeframe] = useState(defaultTimeframe);
   const [question, setQuestion] = useState("");
   const [uploads, setUploads] = useState<UploadMeta[]>([]);
+  const [reportShown, setReportShown] = useState(true);
   const { workflowState, details, result, loading, error, run } = useAnalysisFlow();
 
   function handleRun() {
+    setReportShown(false);
     const body: AnalyzeInput = {
       region,
       timeframe,
@@ -77,6 +80,11 @@ export function VineyardDashboard() {
       id: "weather",
       node: <WeatherLineChart regionId={result.region.id} />,
     });
+    if (result.feature?.reportMarkdown)
+      resultCards.push({
+        id: "report",
+        node: <FullReportCard markdown={result.feature.reportMarkdown} />,
+      });
   }
 
   return (
@@ -187,11 +195,18 @@ export function VineyardDashboard() {
         />
       </section>
 
-      {/* Run-time overlay */}
-      <RunOverlay open={loading} state={workflowState} details={details} />
+      {/* Run-time overlay — stays open in completion state until the user
+          clicks "View report". Hides itself after the click. */}
+      <RunOverlay
+        open={loading || (!!result && !reportShown)}
+        loading={loading}
+        state={workflowState}
+        details={details}
+        onContinue={() => setReportShown(true)}
+      />
 
       {/* Results — progressive cascade */}
-      {result ? (
+      {result && reportShown ? (
         <section className="space-y-8">
           {resultCards.map((card, i) => (
             <div
@@ -204,7 +219,7 @@ export function VineyardDashboard() {
           ))}
         </section>
       ) : (
-        !loading && (
+        !loading && !result && (
           <section className="rounded-xl border border-dashed p-12 text-center animate-fade-in">
             <p className="text-sm text-muted-foreground">{t("vineyard.subtitle")}</p>
           </section>

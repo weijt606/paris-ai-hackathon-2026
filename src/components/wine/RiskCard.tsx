@@ -3,6 +3,7 @@
 import { cn } from "@/lib/utils";
 import { useAnimatedNumber } from "@/lib/hooks/useAnimatedNumber";
 import { useT } from "@/lib/i18n/Provider";
+import { RiskBandLegend } from "@/components/wine/RiskBandLegend";
 import type { AnalyzeResult, RiskBand } from "@/lib/wine/types";
 
 const BAND_STYLES: Record<RiskBand, string> = {
@@ -46,6 +47,8 @@ export function RiskCard({ result }: { result: AnalyzeResult }) {
           {t(BAND_LABEL_KEY[result.riskBand])}
         </span>
       </header>
+
+      <RiskBandLegend score={result.riskScore} band={result.riskBand} />
 
       {result.drivers.length > 0 && (
         <section className="mt-10">

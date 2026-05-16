@@ -49,21 +49,52 @@ export type FeatureOutput = FeatureSummary;
 // Shared system prompt body (same for both tiers; structure note diverges).
 const PROMPT_BODY = `You are the feature agent in a wine-intelligence pipeline.
 
-You receive an evaluation from the upstream extraction agent (risk score, quality band, driver summary, recommendations summary, rationale) plus the target region and persona. You produce THREE user-facing artifacts:
+You receive an evaluation from the upstream extraction agent (risk score, quality band, driver summary, recommendations summary, rationale) plus the target region and persona. You produce THREE user-facing artifacts.
 
-1. executiveSummary — exactly 2 concise sentences. Mention the region by id, the risk level qualitatively, and the dominant driver. No marketing fluff.
+GLOBAL RULES — apply to all three artifacts:
+- English only.
+- No emojis. No marketing adjectives ("exceptional", "remarkable", "fantastic").
+- Numbers are facts: cite the score (X/100), the band, and at least one specific upstream metric from the drivers.
+- If a driver mentions a metric (e.g. "GST 18.8°C", "harvest rain 130mm", "TPI -1.2", "yield 48 hl/ha"), reuse the exact figure.
+- For trade persona, frame around buying/selling decisions. For vineyard, frame around operational decisions.
+- Trade sub-personas (when provided): merchant → en-primeur / allocation / price-volatility; restaurant → by-the-glass viability + list-refresh cadence; wineshop → retail volume + mainstream appeal + supply predictability.
 
-2. reportMarkdown — a one-page markdown report (~250–400 words). Sections:
-   # Vintage outlook — {regionId}
-   ## Risk profile
-   ## Key drivers
-   ## Recommendations ({persona})
-   ## Caveats
-   Persona-appropriate tone: operational/agronomic for vineyard, commercial/buying-decision for trade.
+1. executiveSummary — exactly 2 sentences, max 50 words total.
+   Sentence 1: state the verdict (risk band + score) and the single dominant driver.
+   Sentence 2: state the single most actionable implication for the persona.
 
-3. emailDigest — short markdown digest for a weekly email. About 5–8 lines. Start with a one-line subject, then 2–3 sentences of summary, then a 2-item bullet list of top recommendations.
+2. reportMarkdown — a structured one-page markdown report, 280–420 words. EXACT structure:
 
-Output language: English. Be specific. No padding.`;
+# Vintage outlook — {regionId}
+
+**Risk:** {score}/100 ({band}) · **Quality:** {qualityBand}
+
+## TL;DR
+One short paragraph (2-3 sentences) summarising the verdict.
+
+## Key metrics
+A markdown table with 3–5 rows. Columns: \`Metric | Value | Implication\`. Pull metrics from the upstream drivers; one-line implication each.
+
+## Risk drivers
+Ranked numbered list, top 3 drivers from extraction. For each: bold the driver name, then a one-sentence explanation with the metric, then a one-sentence "what this means" line.
+
+## Recommendations ({persona})
+Numbered list of 2–3 concrete actions. Each item: bold imperative verb (e.g. **Allocate**, **Hedge**, **Hold**, **List by the glass**, **Refresh SKU**), then a single sentence specifying timing, magnitude, or counterpart.
+
+## Caveats
+2–3 bullet points: data freshness, signals that would change the verdict, what's NOT yet observable.
+
+3. emailDigest — short markdown digest for a weekly email. EXACT structure:
+
+**Subject:** one line, ≤ 12 words, includes region + band.
+
+One paragraph (2 sentences) of summary that references the score and the dominant driver.
+
+**Action items:**
+- bullet 1 (imperative verb, specific timing / magnitude)
+- bullet 2 (imperative verb, specific timing / magnitude)
+
+Total ≤ 8 lines.`;
 
 // For Pioneer / open-source models: explicit JSON-only contract since most
 // open-source models don't support OpenAI's strict json_schema mode.
@@ -148,34 +179,53 @@ function templateFallback(input: FeatureInput, reason: string): FeatureOutput {
           ? "moderate"
           : "low";
   const persona = input.persona;
+  const driverLines = (input.driversSummary ?? "")
+    .split(/;\s*/)
+    .filter(Boolean)
+    .slice(0, 3);
   return {
-    executiveSummary: `${input.regionId} is in a ${risk}-risk window with an underlying ${band.toLowerCase()} vintage outlook. ${input.driversSummary ?? "Driver context unavailable."}`,
+    executiveSummary: `${input.regionId} carries a ${risk}-risk outlook at ${input.score}/100 against a ${band.toLowerCase()} vintage backdrop. ${input.recommendationsSummary ?? "Refer to detailed drivers for the actionable read."}`,
     reportMarkdown: [
       `# Vintage outlook — ${input.regionId}`,
       ``,
-      `## Risk profile`,
-      `- **Risk score:** ${input.score}/100 (${risk})`,
-      `- **Quality band:** ${band}`,
+      `**Risk:** ${input.score}/100 (${risk}) · **Quality:** ${band}`,
       ``,
-      `## Key drivers`,
-      input.driversSummary ?? "_Heuristic fallback: no driver detail available._",
+      `## TL;DR`,
+      `${input.regionId} is in a ${risk}-risk window with a ${band.toLowerCase()} underlying vintage outlook. ${input.rationale ?? input.driversSummary ?? "Driver detail unavailable in fallback mode."}`,
+      ``,
+      `## Key metrics`,
+      `| Metric | Value | Implication |`,
+      `| --- | --- | --- |`,
+      `| Risk score | ${input.score}/100 | ${risk} risk band |`,
+      `| Quality band | ${band} | underlying vintage outlook |`,
+      driverLines[0] ? `| Lead driver | ${driverLines[0]} | dominant signal |` : "",
+      ``,
+      `## Risk drivers`,
+      driverLines.length > 0
+        ? driverLines.map((d, i) => `${i + 1}. **Driver ${i + 1}** — ${d}`).join("\n")
+        : "_Heuristic fallback: no driver detail available._",
       ``,
       `## Recommendations (${persona})`,
-      input.recommendationsSummary ?? "_Recommendations unavailable in fallback mode._",
+      input.recommendationsSummary
+        ? `1. **Review** — ${input.recommendationsSummary}`
+        : "_Recommendations unavailable in fallback mode._",
       ``,
       `## Caveats`,
-      `Generated by deterministic template (${reason}). Configure PIONEER_API_KEY or OPENAI_API_KEY for the full LLM report.`,
-      input.rationale ? `\n_Extraction rationale: ${input.rationale}_` : "",
-    ].join("\n"),
+      `- Generated by deterministic template (${reason}). Configure PIONEER_API_KEY or OPENAI_API_KEY for the full LLM report.`,
+      `- Numbers reflect the most recent extraction pass; signals can shift before the next vintage update.`,
+    ]
+      .filter((l) => l !== "")
+      .join("\n"),
     emailDigest: [
-      `**Weekly outlook — ${input.regionId}**`,
+      `**Subject:** ${input.regionId} — ${risk} risk window (${input.score}/100)`,
       ``,
-      `Risk score **${input.score}/100** (${risk}), quality band ${band}.`,
-      input.driversSummary ?? "Drivers unavailable.",
+      `Risk **${input.score}/100** (${risk}) against a ${band.toLowerCase()} vintage backdrop. ${input.driversSummary ?? "Drivers unavailable."}`,
       ``,
+      `**Action items:**`,
       input.recommendationsSummary
-        ? `Top recommendation: ${input.recommendationsSummary}`
-        : "_Recommendations unavailable in fallback mode._",
+        ? `- ${input.recommendationsSummary}`
+        : `- Review the full driver list before committing.`,
+      `- Re-run the analysis when fresh signals land for ${input.regionId}.`,
     ].join("\n"),
   };
 }
