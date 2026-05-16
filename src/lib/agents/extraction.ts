@@ -131,6 +131,27 @@ const RESPONSE_JSON_SCHEMA = {
   },
 } as const;
 
+// ─── Trade sub-persona lens ────────────────────────────────────────────
+
+/**
+ * Returns a one-paragraph "lens" that biases driver weighting + recommendations
+ * toward the trade sub-persona. Kept short so it doesn't dominate the system
+ * prompt — the schema scoring stays the same, only the rationale + drivers +
+ * recommendations should shift in emphasis.
+ */
+function tradePersonaLens(tp: "merchant" | "restaurant" | "wineshop"): string {
+  if (tp === "merchant") {
+    return `Trade sub-persona: MERCHANT (négociant / en-primeur buyer).
+Lens: prioritise drivers that affect en-primeur pricing, allocation availability, and age-worthiness. Emphasise long-term cellar potential and price-volatility signals. Recommendations should target allocation sizing, hedging across vintages, and en-primeur participation decisions.`;
+  }
+  if (tp === "restaurant") {
+    return `Trade sub-persona: RESTAURANT (sommelier / wine-list buyer).
+Lens: prioritise drivers that affect by-the-glass viability, vintage-to-vintage consistency, and food-pairing reliability. De-emphasise long-term cellar metrics. Recommendations should target list-refresh cadence, replacement candidates within the same style, and pairing-flexibility notes.`;
+  }
+  return `Trade sub-persona: WINESHOP (retail / supermarket buyer).
+Lens: prioritise drivers that affect retail volume, mainstream consumer appeal, predictable supply, and price-tier diversity. De-emphasise critic-driven prestige metrics in favour of broad-market signals. Recommendations should target SKU breadth, promotional timing, and price-band coverage.`;
+}
+
 // ─── Heuristic fallback (tier 3) ───────────────────────────────────────
 
 function heuristicFallback(input: ExtractionInput): ExtractionOutput {
@@ -212,9 +233,15 @@ export const extractionAgent: SubAgent<ExtractionInput, ExtractionOutput> = {
 
     try {
       const client = openaiClient();
+      const tradeLens =
+        input.persona === "trade" && ctx.tradePersona
+          ? tradePersonaLens(ctx.tradePersona)
+          : "";
+
       const userMessage = [
         `Region id: ${input.regionId}`,
         `Persona: ${input.persona}`,
+        tradeLens,
         input.weatherSignal && `Weather signals:\n${input.weatherSignal}`,
         input.geoSignal && `Geographical / terroir signals:\n${input.geoSignal}`,
         input.tavilySignal && `Public-web signals:\n${input.tavilySignal}`,

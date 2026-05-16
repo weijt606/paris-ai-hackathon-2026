@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useT } from "@/lib/i18n/Provider";
 import { BacktestCard } from "@/components/wine/BacktestCard";
 import { ExecutiveSummary } from "@/components/wine/ExecutiveSummary";
+import { RegionPicker } from "@/components/wine/RegionPicker";
 import { RiskCard } from "@/components/wine/RiskCard";
 import { TerroirCard } from "@/components/wine/TerroirCard";
 import { DriverDonutChart } from "@/components/wine/charts/DriverDonutChart";
@@ -15,9 +16,12 @@ import { ExportButton } from "@/components/wine/shared/ExportButton";
 import { SubscribeDialog } from "@/components/wine/shared/SubscribeDialog";
 import { TimeframePicker } from "@/components/wine/shared/TimeframePicker";
 import { RunOverlay } from "@/components/wine/shared/RunOverlay";
+import { ProductPicker } from "@/components/wine/trade/ProductPicker";
+import { TradePersonaTabs } from "@/components/wine/trade/TradePersonaTabs";
 import { useAnalysisFlow } from "@/lib/hooks/useAnalysisFlow";
 import { BORDEAUX_BENCHMARKS } from "@/lib/wine/bordeaux-benchmarks";
-import type { AnalyzeInput, Timeframe } from "@/lib/wine/types";
+import type { Product } from "@/lib/wine/products";
+import type { AnalyzeInput, Region, Timeframe, TradePersona } from "@/lib/wine/types";
 
 const BordeauxMap = dynamic(
   () => import("@/components/wine/trade/BordeauxMap").then((m) => m.BordeauxMap),
@@ -34,42 +38,75 @@ function defaultTimeframe(): Timeframe {
   return { start: `${year}-01-01`, end: `${year}-12-31` };
 }
 
+/**
+ * Which cards each trade sub-persona sees in the result cascade. The
+ * underlying analysis runs the full agent stack regardless; we just gate
+ * the visible cards so each persona reads as its own focused workflow.
+ *
+ *   merchant   — full breadth (en-primeur buyer wants everything)
+ *   restaurant — exec + backtest + risk + drivers (sommelier wants verdict + why)
+ *   wineshop   — exec + risk + drivers + regional/sentiment (retail wants comparison)
+ */
+const PERSONA_CARDS: Record<TradePersona, ReadonlySet<string>> = {
+  merchant: new Set(["executive", "backtest", "risk", "terroir", "drivers", "weather", "regional-sentiment"]),
+  restaurant: new Set(["executive", "backtest", "risk", "drivers"]),
+  wineshop: new Set(["executive", "risk", "drivers", "regional-sentiment"]),
+};
+
 export function TradeDashboard() {
   const t = useT();
   const first = BORDEAUX_BENCHMARKS[0]!;
-  const [selected, setSelected] = useState({ id: first.id, name: first.name });
+  const [selected, setSelected] = useState<Pick<Region, "id" | "name" | "parent">>(
+    { id: first.id, name: first.name, parent: "bordeaux" },
+  );
   const [chateau, setChateau] = useState<{ name: string; aoc: string } | null>(null);
+  const [product, setProduct] = useState<Product | null>(null);
   const [timeframe, setTimeframe] = useState(defaultTimeframe);
+  const [tradePersona, setTradePersona] = useState<TradePersona>("merchant");
   const { workflowState, details, result, loading, error, run } = useAnalysisFlow();
 
   function handleRun() {
     const body: AnalyzeInput = {
-      region: { id: selected.id, name: selected.name, parent: "bordeaux" },
+      region: { id: selected.id, name: selected.name, parent: selected.parent },
       timeframe,
       persona: "trade",
+      tradePersona,
       chateau: chateau?.name,
     };
     void run(body);
   }
 
-  const resultCards: Array<{ id: string; node: React.ReactNode }> = [];
+  function onProductPick(p: Product | null) {
+    setProduct(p);
+    if (!p) return;
+    setSelected({ id: p.region.id, name: p.region.name, parent: p.region.parent });
+    if (p.chateau) {
+      setChateau({ name: p.chateau.name, aoc: p.chateau.aoc });
+    } else {
+      setChateau(null);
+    }
+  }
+
+  const visibleCardIds = PERSONA_CARDS[tradePersona];
+
+  const allCards: Array<{ id: string; node: React.ReactNode }> = [];
   if (result) {
     if (result.feature?.executiveSummary)
-      resultCards.push({
+      allCards.push({
         id: "executive",
         node: <ExecutiveSummary text={result.feature.executiveSummary} />,
       });
     if (result.backtest)
-      resultCards.push({ id: "backtest", node: <BacktestCard backtest={result.backtest} /> });
-    resultCards.push({ id: "risk", node: <RiskCard result={result} /> });
+      allCards.push({ id: "backtest", node: <BacktestCard backtest={result.backtest} /> });
+    allCards.push({ id: "risk", node: <RiskCard result={result} /> });
     if (result.geoSnapshot)
-      resultCards.push({ id: "terroir", node: <TerroirCard snapshot={result.geoSnapshot} /> });
-    resultCards.push({ id: "drivers", node: <DriverDonutChart drivers={result.drivers} /> });
-    resultCards.push({
+      allCards.push({ id: "terroir", node: <TerroirCard snapshot={result.geoSnapshot} /> });
+    allCards.push({ id: "drivers", node: <DriverDonutChart drivers={result.drivers} /> });
+    allCards.push({
       id: "weather",
       node: <WeatherLineChart regionId={result.region.id} />,
     });
-    resultCards.push({
+    allCards.push({
       id: "regional-sentiment",
       node: (
         <div className="grid gap-6 md:grid-cols-2">
@@ -79,6 +116,8 @@ export function TradeDashboard() {
       ),
     });
   }
+
+  const resultCards = allCards.filter((c) => visibleCardIds.has(c.id));
 
   return (
     <main className="container mx-auto max-w-6xl px-6 py-12">
@@ -97,7 +136,7 @@ export function TradeDashboard() {
         <div className="flex items-center gap-2 print:hidden">
           <ExportButton
             reportMarkdown={result?.feature?.reportMarkdown}
-            filename={`wine-signals-${selected.id}.md`}
+            filename={`wine-signals-${selected.id}-${tradePersona}.md`}
           />
           <SubscribeDialog
             regionId={selected.id}
@@ -107,9 +146,31 @@ export function TradeDashboard() {
         </div>
       </header>
 
+      {/* Persona segmented switcher */}
+      <section className="mb-6 flex items-center gap-4 print:hidden animate-fade-in">
+        <span className="text-[10px] uppercase tracking-luxe text-muted-foreground">
+          {t("trade.persona.label")}
+        </span>
+        <TradePersonaTabs value={tradePersona} onChange={setTradePersona} />
+      </section>
+
       {/* Controls — top section */}
       <section className="mb-10 rounded-md border bg-card p-8 print:hidden animate-fade-in-up">
-        <div className="max-w-md">
+        <div className="grid gap-6 md:grid-cols-2">
+          <RegionPicker
+            value={selected.id}
+            onChange={(r) => {
+              setSelected({ id: r.id, name: r.name, parent: r.parent });
+              // Region change → clear chateau + product (their pointer to the
+              // previous region is no longer valid).
+              setChateau(null);
+              setProduct(null);
+            }}
+          />
+          <ProductPicker value={product?.id ?? null} onChange={onProductPick} />
+        </div>
+
+        <div className="mt-6 max-w-md">
           <TimeframePicker value={timeframe} onChange={setTimeframe} />
         </div>
 
@@ -124,7 +185,10 @@ export function TradeDashboard() {
                 <span className="text-[10px] text-muted-foreground">{chateau.aoc}</span>
                 <button
                   type="button"
-                  onClick={() => setChateau(null)}
+                  onClick={() => {
+                    setChateau(null);
+                    setProduct(null);
+                  }}
                   className="text-[10px] uppercase tracking-luxe text-muted-foreground hover:text-foreground"
                   aria-label={t("common.clear")}
                 >
@@ -161,7 +225,8 @@ export function TradeDashboard() {
           onChateauSelect={(c) => {
             if (c) {
               setChateau({ name: c.name, aoc: c.aoc });
-              setSelected({ id: c.regionId, name: c.regionName });
+              setSelected({ id: c.regionId, name: c.regionName, parent: "bordeaux" });
+              setProduct(null);
             } else {
               setChateau(null);
             }
@@ -172,12 +237,12 @@ export function TradeDashboard() {
       {/* Run-time overlay */}
       <RunOverlay open={loading} state={workflowState} details={details} />
 
-      {/* Results — progressive reveal cascade */}
+      {/* Results — persona-filtered, progressive reveal cascade */}
       {result ? (
         <section className="space-y-8">
           {resultCards.map((card, i) => (
             <div
-              key={`${result.generatedAt}-${card.id}`}
+              key={`${result.generatedAt}-${tradePersona}-${card.id}`}
               className="animate-fade-in-up"
               style={{ animationDelay: `${i * 140}ms` }}
             >

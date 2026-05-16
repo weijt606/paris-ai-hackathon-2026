@@ -112,6 +112,7 @@ function cacheKey(input: AnalyzeInput): string {
   return JSON.stringify({
     r: input.region.id,
     p: input.persona,
+    tp: input.tradePersona ?? "",
     s: input.timeframe.start,
     e: input.timeframe.end,
     q: input.question ?? "",
@@ -167,6 +168,7 @@ export async function analyze(
     persona: input.persona,
     uploads: input.uploads,
     chateau: input.chateau,
+    tradePersona: input.persona === "trade" ? (input.tradePersona ?? "merchant") : undefined,
     isBacktest,
     vintageYear: Number.isFinite(vintageYear) ? vintageYear : undefined,
     signal: opts.signal ?? new AbortController().signal,
@@ -179,6 +181,9 @@ export async function analyze(
     `Region: ${input.region.name} (id=${input.region.id}, parent=${input.region.parent})`,
     `Timeframe: ${input.timeframe.start} → ${input.timeframe.end}`,
     `Persona: ${input.persona}`,
+    input.persona === "trade" && ctx.tradePersona
+      ? `Trade sub-persona: ${ctx.tradePersona} — bias risk lens accordingly (merchant→en-primeur/allocation/price-volatility; restaurant→by-the-glass viability and vintage-variation tolerance; wineshop→retail volume, mainstream appeal, supply predictability).`
+      : "",
     input.question ? `Refinement: ${input.question}` : "",
     input.chateau
       ? `Focus château: ${input.chateau} — call geo_agent in single-site mode by passing chateau="${input.chateau}".`

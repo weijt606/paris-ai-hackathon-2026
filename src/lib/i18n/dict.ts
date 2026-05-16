@@ -144,6 +144,19 @@ export const DICT = {
   },
   "trade.focus_chateau": { fr: "Château ciblé", en: "Focus château" },
 
+  // ── trade sub-persona ────────────────────────────────────────────────
+  "trade.persona.label": { fr: "Profil", en: "Buyer profile" },
+  "trade.persona.merchant": { fr: "Négociant", en: "Merchant" },
+  "trade.persona.restaurant": { fr: "Restaurant", en: "Restaurant" },
+  "trade.persona.wineshop": { fr: "Cave / supermarché", en: "Wineshop" },
+
+  // ── product picker ───────────────────────────────────────────────────
+  "trade.product.label": { fr: "Produit", en: "Product" },
+  "trade.product.placeholder": {
+    fr: "Rechercher un vin, ex. Château Margaux…",
+    en: "Search a wine, e.g. Château Margaux…",
+  },
+
   // ── results ───────────────────────────────────────────────────────────
   "result.risk_score": { fr: "Score de risque", en: "Risk score" },
   "result.band.low": { fr: "Faible", en: "Low" },

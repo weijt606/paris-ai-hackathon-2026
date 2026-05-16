@@ -7,6 +7,22 @@
 
 export type Persona = "vineyard" | "trade";
 
+/**
+ * Trade sub-persona — applies only when persona = "trade". Distinguishes
+ * three buyer archetypes whose risk lens differs even on identical
+ * weather/geo/tavily evidence:
+ *
+ *   - merchant    : en-primeur, allocation, price volatility, age-worthiness
+ *   - restaurant  : by-the-glass viability, vintage variation tolerance,
+ *                   wine-list refresh cadence, food-pairing flexibility
+ *   - wineshop    : retail volume, mainstream consumer appeal, predictable
+ *                   supply, price-tier diversity
+ *
+ * Threaded through extraction + feature prompts so the LLM weights drivers
+ * accordingly; also gates which result cards render in the dashboard.
+ */
+export type TradePersona = "merchant" | "restaurant" | "wineshop";
+
 export type RiskBand = "low" | "moderate" | "elevated" | "high";
 
 export interface Region {
@@ -47,6 +63,12 @@ export interface AnalyzeInput {
    * geo_agent switches to single-site mode; user intent wins over GPT routing.
    */
   chateau?: string;
+  /**
+   * Optional trade sub-persona — only meaningful when persona === "trade".
+   * Defaults to "merchant" on the server if persona === "trade" and this is
+   * absent (preserves prior behavior for older clients).
+   */
+  tradePersona?: TradePersona;
 }
 
 /** Client-safe shape of the geo_agent's structured signals — surfaced on
