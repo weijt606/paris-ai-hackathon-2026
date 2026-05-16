@@ -45,8 +45,12 @@ behind.
 │   • DEMO_FAST=true (default)  ─ directDispatch()                         │
 │     Fixed-order pipeline — saves 5-7 GPT routing roundtrips.             │
 │     phase 1: weather + geo                (parallel, <50 ms)             │
-│     phase 2: tavily + extraction          (parallel; extraction runs     │
-│                                            on weather+geo signals only)  │
+│     phase 1b: Tavily fires; raced vs 3 s budget                          │
+│     phase 2: extraction                   (full 3 signals when Tavily    │
+│                                            made the budget; weather+geo  │
+│                                            only when Tavily is cold —    │
+│                                            Tavily still runs concurrent  │
+│                                            for trace + backtest input)   │
 │     phase 3: feature + backtest           (parallel when backtest fires) │
 │                                                                          │
 │   • DEMO_FAST=false ─ OpenAI Chat Completions tool-use loop              │

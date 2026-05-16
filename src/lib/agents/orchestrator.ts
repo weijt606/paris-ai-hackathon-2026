@@ -336,25 +336,49 @@ async function directDispatch(
     return r.error ?? "no data";
   };
 
-  // Phase 2 — tavily + extraction in parallel. Extraction would normally
-  // wait on tavily's signal, but tavily's main consumer is backtest +
-  // the trace (UI evidence list). For demo-fast we let extraction run on
-  // weather+geo signals alone so its 18 s LLM call overlaps with
-  // tavily's 5-10 s network round-trip — total wallclock = max() of the
-  // two, not sum.
-  const [tavily, extraction] = await Promise.all([
-    runAgentSafely(tavilyAgent as AnyAgent, tavilyInput, ctx),
-    runAgentSafely(
-      extractionAgent as AnyAgent,
-      {
-        regionId: input.region.id,
-        persona: input.persona,
-        weatherSignal: summary(weather),
-        geoSignal: summary(geo),
-      },
-      ctx,
-    ),
+  // Phase 2 — cache-aware Tavily feed into extraction.
+  //
+  // Accuracy requirement: the extraction agent must see the Tavily signal so
+  // its driver weighting incorporates public-web evidence (critic chatter,
+  // market reaction, regulatory news). But we don't want every cold call to
+  // pay the full 6-10 s Tavily network round-trip serially before extraction
+  // can start — that pushes the wallclock past budget.
+  //
+  // Strategy: fire Tavily immediately, race it against a 3 s budget. If
+  // Tavily resolves in that window (the common case: SQLite cache hit or
+  // hydrated entry → <100 ms; pre-warmed search → 1-3 s), extraction starts
+  // WITH the Tavily signal. If Tavily is still going at 3 s (true cold
+  // network), extraction starts without it but Tavily keeps running in the
+  // background — we await it before pushing to the trace and feeding it to
+  // backtest. Net effect:
+  //   • cached / warm path: full accuracy, ~0 ms overhead vs. parallel
+  //   • cold path: same wallclock as before, mild accuracy degradation
+  //     (extraction misses Tavily); trace + backtest still see it
+  const TAVILY_BUDGET_MS = 3000;
+  const tavilyPromise = runAgentSafely(tavilyAgent as AnyAgent, tavilyInput, ctx);
+  const tavilyForExtraction = await Promise.race<AgentResult | null>([
+    tavilyPromise,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), TAVILY_BUDGET_MS)),
   ]);
+
+  const extraction = await runAgentSafely(
+    extractionAgent as AnyAgent,
+    {
+      regionId: input.region.id,
+      persona: input.persona,
+      weatherSignal: summary(weather),
+      geoSignal: summary(geo),
+      ...(tavilyForExtraction
+        ? { tavilySignal: summary(tavilyForExtraction) }
+        : {}),
+    },
+    ctx,
+  );
+
+  // Make sure we always have the Tavily result for trace + backtest, even
+  // if it raced past the extraction window. Tavily is concurrent with the
+  // extraction LLM call, so this await is almost always a no-op.
+  const tavily = tavilyForExtraction ?? (await tavilyPromise);
   trace.push(weather, geo, tavily, extraction);
 
   // Phase 3 — feature_agent reads from extraction's score / band / drivers.

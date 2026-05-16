@@ -1,5 +1,5 @@
 import "server-only";
-import { integrations, isDemoFast, isDemoMode, openaiModelForAgents, sponsors } from "@/lib/env";
+import { integrations, isDemoMode, openaiModelForAgents, sponsors } from "@/lib/env";
 import { openaiClient } from "@/lib/ai/openai";
 import { pioneerChat } from "@/lib/training/pioneer";
 import type { SubAgent } from "@/lib/agents/types";
@@ -334,13 +334,13 @@ export const featureAgent: SubAgent<FeatureInput, FeatureOutput> = {
       };
     }
 
-    // tier 1 — Pioneer (preferred sponsor path)
-    // Demo-fast mode skips Pioneer entirely. Pioneer-hosted open models
-    // are the slowest single step in the pipeline (6-10 s warm), and on
-    // a tight ≤30 s demo budget the OpenAI tier-2 path (~3 s) beats it
-    // even though we lose the "narrative wrapping on a small open model"
-    // sponsor story.
-    const pioneer = isDemoFast ? null : await tryPioneer(input, ctx.signal);
+    // tier 1 — Pioneer (preferred sponsor path).
+    // Pioneer-hosted open models are slower than gpt-4o-mini (6-10 s warm vs
+    // ~3 s) but they're the intended primary tier — the whole point of the
+    // 3-tier stack is "small open-source model wraps the numbers, OpenAI is
+    // the fallback for strict-schema reliability." Keeping it on the hot
+    // path preserves the sponsor story and the prose quality.
+    const pioneer = await tryPioneer(input, ctx.signal);
     if (pioneer) {
       return {
         agent: "feature_agent",
