@@ -17,6 +17,8 @@ export interface BacktestInput {
   predictedBand?: "Great" | "Excellent" | "Good" | "Average" | "Poor";
   /** One-sentence summary of dominant drivers (helps the LLM align). */
   driversSummary?: string;
+  /** Optional château focus — narrows the critic search to a specific estate. */
+  chateau?: string;
 }
 
 export type BacktestOutput = BacktestSnapshot;
@@ -115,15 +117,30 @@ async function fetchCriticContext(
   regionName: string,
   year: number,
   signal: AbortSignal,
+  chateau?: string,
 ): Promise<string> {
   if (!integrations.tavily) return "";
   try {
+    // Mirror the orchestrator's tavily_agent call shape — no aggressive
+    // refinement, just chateau scoping when available. An earlier attempt
+    // here appended a long "Wine Advocate Decanter Vinous … retrospective
+    // tasting note" string to every base query, which made the per-source-
+    // type query so specific that Tavily returned zero hits across all
+    // five channels. The plain base queries (with chateau) reliably pull
+    // 30+ hits including critic-attributed snippets the downstream LLM
+    // can extract scores from.
     const out = await runTavilyHarness(
-      { region: "Bordeaux", startYear: year, endYear: year, maxResultsPerQuery: 5 },
+      {
+        region: "Bordeaux",
+        startYear: year,
+        endYear: year,
+        maxResultsPerQuery: 5,
+        ...(chateau ? { chateau } : {}),
+      },
       { signal },
     );
     void buildTavilyQueries; // queries are baked into runTavilyHarness
-    // We just need a compact text dump of top results for the LLM to read.
+
     const top = out.results.slice(0, 12);
     if (top.length === 0) return "";
     return top
@@ -154,6 +171,10 @@ export const backtestAgent: SubAgent<BacktestInput, BacktestOutput> = {
         enum: ["Great", "Excellent", "Good", "Average", "Poor"],
       },
       driversSummary: { type: "string" },
+      chateau: {
+        type: "string",
+        description: "Optional château focus — narrows critic retrieval to a specific estate.",
+      },
     },
     required: ["regionId", "regionName", "year", "persona", "predictedScore"],
   },
@@ -181,7 +202,13 @@ export const backtestAgent: SubAgent<BacktestInput, BacktestOutput> = {
       };
     }
 
-    const criticContext = await fetchCriticContext(input.regionName, input.year, ctx.signal);
+    const chateau = input.chateau ?? ctx.chateau;
+    const criticContext = await fetchCriticContext(
+      input.regionName,
+      input.year,
+      ctx.signal,
+      chateau,
+    );
 
     try {
       const client = openaiClient();

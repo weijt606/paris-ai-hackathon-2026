@@ -401,6 +401,7 @@ async function directDispatch(
             predictedScore: ext?.score ?? 0,
             predictedBand: ext?.qualityBand,
             driversSummary,
+            chateau: input.chateau,
           },
           ctx,
         )
