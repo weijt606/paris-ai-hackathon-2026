@@ -17,7 +17,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check:env": "tsx scripts/check-env.ts",
-    "test:geo": "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' tsx scripts/test-geo-agent.ts"
+    "test:geo": "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' tsx scripts/test-geo-agent.ts",
+    "test:weather": "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' tsx scripts/test-weather-agent.ts"
   },
   "dependencies": {
     "clsx": "^2.1.1",
