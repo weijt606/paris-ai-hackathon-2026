@@ -47,6 +47,36 @@ export interface ForecastRow extends ClimateRow {
   templateYear: number;
 }
 
+export interface MonthlyRow {
+  chateau: string;
+  aoc: string;
+  year: number;
+  month: number;
+  /** Monthly mean of daily Tmean, °C. */
+  tmean: number;
+  /** Monthly mean of daily Tmin, °C. */
+  tminMean: number;
+  /** Monthly mean of daily Tmax, °C. */
+  tmaxMean: number;
+  /** Monthly extremes — peak Tmax and lowest Tmin. */
+  tmaxMax: number;
+  tminMin: number;
+  /** Monthly precipitation sum, mm. */
+  precipSum: number;
+  /** Monthly sunshine duration sum, hours. */
+  sunHours: number;
+  /** Monthly shortwave radiation sum, MJ/m². */
+  radiationMJ: number;
+  /** Monthly mean diurnal range, °C. */
+  dtrMean: number;
+  /** Count of days with Tmax ≥ 35 °C in the month. */
+  heatDays35: number;
+  /** Count of days with Tmin ≤ 0 °C in the month. */
+  frostDays0: number;
+  /** Count of days with Tmin ≤ −2 °C in the month (schema-aligned threshold). */
+  frostDaysM2: number;
+}
+
 export interface SkillEntry {
   targetMonth: number;
   n: number;
@@ -74,6 +104,7 @@ const REGION_TO_AOCS: Record<string, string[]> = {
 let _historical: ClimateRow[] | null = null;
 let _forecast: ForecastRow[] | null = null;
 let _skill: ForecastSkill | null = null;
+let _monthly: MonthlyRow[] | null = null;
 
 export function loadHistorical(): ClimateRow[] {
   if (_historical !== null) return _historical;
@@ -103,6 +134,46 @@ export function loadForecast(): ForecastRow[] {
     _forecast = [];
   }
   return _forecast;
+}
+
+export function loadMonthly(): MonthlyRow[] {
+  if (_monthly !== null) return _monthly;
+  try {
+    const text = readFileSync(path.join(process.cwd(), "data/climate_monthly.csv"), "utf-8");
+    _monthly = parseCsv(text).map(parseMonthlyRow);
+  } catch (err) {
+    console.warn("[climate] failed to load monthly:", err);
+    _monthly = [];
+  }
+  return _monthly;
+}
+
+/**
+ * Filter monthly rows for a vintage year's growing+harvest+winter window.
+ * Returns rows for months Mar(year)..Dec(year) plus Oct..Dec(year-1) so the
+ * caller can compute winter rain (Oct-Mar previous-year carryover).
+ */
+export function getMonthlyRows(opts: {
+  regionId: string;
+  year: number;
+  chateau?: string;
+}): MonthlyRow[] {
+  const all = loadMonthly();
+  const aocs = new Set(aocsForRegion(opts.regionId));
+  let rows = all.filter(
+    (r) =>
+      aocs.has(r.aoc) &&
+      ((r.year === opts.year) ||
+        (r.year === opts.year - 1 && r.month >= 10)),
+  );
+  if (opts.chateau) {
+    const q = normalize(opts.chateau);
+    rows = rows.filter((r) => {
+      const n = normalize(r.chateau);
+      return n === q || n.includes(q);
+    });
+  }
+  return rows;
 }
 
 export function loadSkill(): ForecastSkill | null {
@@ -310,6 +381,27 @@ function parseClimateRow(r: Row): ClimateRow {
     frostDays: num(r.frost_days),
     dtrAugSep: num(r.dtr_aug_sep),
     radiationMJ: num(r.radiation_MJ),
+  };
+}
+
+function parseMonthlyRow(r: Row): MonthlyRow {
+  return {
+    chateau: r.chateau ?? "",
+    aoc: r.aoc ?? "",
+    year: num(r.year),
+    month: num(r.month),
+    tmean: num(r.tmean),
+    tmaxMean: num(r.tmax_mean),
+    tminMean: num(r.tmin_mean),
+    tmaxMax: num(r.tmax_max),
+    tminMin: num(r.tmin_min),
+    precipSum: num(r.precip_sum),
+    sunHours: num(r.sun_hours),
+    radiationMJ: num(r.radiation_MJ),
+    dtrMean: num(r.dtr_mean),
+    heatDays35: num(r.heat_days_35),
+    frostDays0: num(r.frost_days_0),
+    frostDaysM2: num(r.frost_days_m2),
   };
 }
 

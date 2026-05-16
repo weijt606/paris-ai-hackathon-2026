@@ -5,11 +5,13 @@ import { demoWeatherSignals } from "@/lib/demo/fixtures";
 import {
   type ClimateRow,
   type ForecastRow,
+  type MonthlyRow,
   type AggregateStats,
   aggregate,
   coolNightApprox,
   getForecastRows,
   getHistoricalRows,
+  getMonthlyRows,
   hasClimateCoverage,
   huglinApprox,
   loadSkill,
@@ -173,10 +175,17 @@ function historicalRead(regionName: string, input: WeatherInput): WeatherSignals
   const requestedYear = Number.parseInt(input.end.slice(0, 4), 10);
   const yearClamped = Number.isFinite(requestedYear) && requestedYear > maxYear;
 
+  const monthly = getMonthlyRows({
+    regionId: input.regionId,
+    year: targetYear,
+    chateau: input.chateau,
+  });
+
   const m = aggregateHistorical(rows);
-  const metrics = buildHistoricalMetrics(m);
-  const summary = formatHistoricalSummary(label, targetYear, rows.length, m);
-  const notes = buildHistoricalNotes(yearClamped, requestedYear, maxYear);
+  const schemaWindows = aggregateSchemaWindows(monthly, targetYear);
+  const metrics = buildHistoricalMetrics(m, schemaWindows);
+  const summary = formatHistoricalSummary(label, targetYear, rows.length, m, schemaWindows);
+  const notes = buildHistoricalNotes(yearClamped, requestedYear, maxYear, schemaWindows !== null);
 
   return { summary, metrics, notes };
 }
@@ -193,6 +202,77 @@ interface HistoricalAggregate {
   radiationMJ: number;
   huglin: number;
   coolNight: number;
+}
+
+interface SchemaWindowedMetrics {
+  /** mean(Tmin) in September — schema-aligned cool_night_index. */
+  coolNightSep: number;
+  /** max of daily Tmax over Apr-Sep — schema extreme_max_temperature. */
+  extremeMaxAprSep: number;
+  /** count(Tmax ≥ 35 °C) Jun-Sep — schema window for heat_days. */
+  heatDaysJunSep: number;
+  /** count(Tmin ≤ −2 °C) Mar-Apr — schema spring_frost_events. */
+  springFrostT2MarApr: number;
+  /** May precip sum — proxy for schema flowering_rain (May 25-Jun 15). */
+  floweringRainMay: number;
+}
+
+/**
+ * Compute schema-aligned vintage features from the monthly aggregate
+ * table. Returns null when no monthly rows are available (so callers
+ * fall back to the vintage-level approximations).
+ *
+ * All values are averaged across the châteaux in `rows` (caller already
+ * filtered to the target region/year/optional château).
+ */
+function aggregateSchemaWindows(
+  rows: MonthlyRow[],
+  targetYear: number,
+): SchemaWindowedMetrics | null {
+  const target = rows.filter((r) => r.year === targetYear);
+  if (target.length === 0) return null;
+
+  const byChateau = new Map<string, MonthlyRow[]>();
+  for (const r of target) {
+    const arr = byChateau.get(r.chateau);
+    if (arr) arr.push(r);
+    else byChateau.set(r.chateau, [r]);
+  }
+
+  const perChateau: SchemaWindowedMetrics[] = [];
+  for (const months of byChateau.values()) {
+    const inWindow = (mo: number, from: number, to: number): MonthlyRow[] =>
+      months.filter((r) => r.month >= from && r.month <= to);
+
+    const sept = months.find((r) => r.month === 9);
+    const aprSep = inWindow(4, 4, 9);
+    const junSep = inWindow(6, 6, 9);
+    const marApr = inWindow(3, 3, 4);
+    const may = months.find((r) => r.month === 5);
+
+    perChateau.push({
+      coolNightSep: sept ? sept.tminMean : NaN,
+      extremeMaxAprSep:
+        aprSep.length > 0 ? Math.max(...aprSep.map((r) => r.tmaxMax)) : NaN,
+      heatDaysJunSep: junSep.reduce((s, r) => s + r.heatDays35, 0),
+      springFrostT2MarApr: marApr.reduce((s, r) => s + r.frostDaysM2, 0),
+      floweringRainMay: may ? may.precipSum : NaN,
+    });
+  }
+
+  const meanOf = (pick: (s: SchemaWindowedMetrics) => number): number => {
+    const xs = perChateau.map(pick).filter(Number.isFinite);
+    if (xs.length === 0) return NaN;
+    return xs.reduce((a, b) => a + b, 0) / xs.length;
+  };
+
+  return {
+    coolNightSep: meanOf((s) => s.coolNightSep),
+    extremeMaxAprSep: meanOf((s) => s.extremeMaxAprSep),
+    heatDaysJunSep: meanOf((s) => s.heatDaysJunSep),
+    springFrostT2MarApr: meanOf((s) => s.springFrostT2MarApr),
+    floweringRainMay: meanOf((s) => s.floweringRainMay),
+  };
 }
 
 function aggregateHistorical(rows: ClimateRow[]): HistoricalAggregate {
@@ -219,20 +299,50 @@ function aggregateHistorical(rows: ClimateRow[]): HistoricalAggregate {
   };
 }
 
-function buildHistoricalMetrics(m: HistoricalAggregate): WeatherSignals["metrics"] {
-  return [
+function buildHistoricalMetrics(
+  m: HistoricalAggregate,
+  s: SchemaWindowedMetrics | null,
+): WeatherSignals["metrics"] {
+  const out: WeatherSignals["metrics"] = [
     { name: "GST", value: round(m.gst, 2), unit: "°C" },
     { name: "GDD10", value: round(m.gdd10, 0), unit: "°C·day" },
     { name: "harvest_rain", value: round(m.harvRain, 0), unit: "mm" },
     { name: "winter_rain", value: round(m.winRain, 0), unit: "mm" },
-    { name: "heat_days", value: round(m.heatDays, 1), unit: "days ≥35°C" },
-    { name: "spring_frost_events", value: round(m.frostDays, 1), unit: "days ≤0°C" },
     { name: "diurnal_temperature_range", value: round(m.dtrAugSep, 2), unit: "°C" },
     { name: "huglin_index", value: round(m.huglin, 0), unit: "°C·day (approx)" },
-    { name: "cool_night_index", value: round(m.coolNight, 2), unit: "°C (approx)" },
     { name: "sun_hours", value: round(m.sunHours, 0), unit: "h" },
     { name: "radiation", value: round(m.radiationMJ, 0), unit: "MJ/m²" },
   ];
+  // Schema-aligned windows come from monthly data when available. Fall
+  // back to the vintage-level approximations otherwise.
+  if (s) {
+    out.push(
+      { name: "heat_days", value: round(s.heatDaysJunSep, 1), unit: "days ≥35°C Jun-Sep" },
+      {
+        name: "spring_frost_events",
+        value: round(s.springFrostT2MarApr, 1),
+        unit: "days ≤−2°C Mar-Apr",
+      },
+      { name: "cool_night_index", value: round(s.coolNightSep, 2), unit: "°C" },
+      {
+        name: "extreme_max_temperature",
+        value: round(s.extremeMaxAprSep, 2),
+        unit: "°C peak Apr-Sep",
+      },
+      { name: "flowering_rain", value: round(s.floweringRainMay, 0), unit: "mm May" },
+    );
+  } else {
+    out.push(
+      { name: "heat_days", value: round(m.heatDays, 1), unit: "days ≥35°C Apr-Sep" },
+      {
+        name: "spring_frost_events",
+        value: round(m.frostDays, 1),
+        unit: "days ≤0°C Apr-May (proxy)",
+      },
+      { name: "cool_night_index", value: round(m.coolNight, 2), unit: "°C (approx)" },
+    );
+  }
+  return out;
 }
 
 function formatHistoricalSummary(
@@ -240,20 +350,38 @@ function formatHistoricalSummary(
   year: number,
   n: number,
   m: HistoricalAggregate,
+  s: SchemaWindowedMetrics | null,
 ): string {
   const lines: string[] = [];
   lines.push(`Vintage ${year} climate (${label}${n > 1 ? `, ${n} châteaux mean` : ""}):`);
   lines.push(`  Growing-season temperature ${fmt(m.gst, 1)} °C ${tempVerdict(m.gst)}.`);
   lines.push(`  Growing degree days base 10: ${fmt(m.gdd10, 0)} °C·day.`);
   lines.push(`  Harvest rain ${fmt(m.harvRain, 0)} mm Aug-Sep ${rainVerdict(m.harvRain)}.`);
-  lines.push(`  Heat-stress days (Tmax≥35 °C): ${fmt(m.heatDays, 1)} in growing season.`);
-  lines.push(
-    `  Cool-night index ~${fmt(m.coolNight, 1)} °C (Sept Tmin approx; ${coolNightVerdict(m.coolNight)}).`,
-  );
-  lines.push(
-    `  Diurnal range Aug-Sep: ${fmt(m.dtrAugSep, 1)} °C ${dtrVerdict(m.dtrAugSep)}.`,
-  );
-  lines.push(`  Spring frost: ${fmt(m.frostDays, 1)} days ≤0 °C Apr-May.`);
+  if (s) {
+    lines.push(
+      `  Heat-stress days (Tmax≥35 °C, Jun-Sep): ${fmt(s.heatDaysJunSep, 1)}.`,
+    );
+    lines.push(
+      `  Extreme peak temperature Apr-Sep: ${fmt(s.extremeMaxAprSep, 1)} °C.`,
+    );
+    lines.push(
+      `  Cool-night index ${fmt(s.coolNightSep, 1)} °C (mean Sept Tmin; ${coolNightVerdict(s.coolNightSep)}).`,
+    );
+    lines.push(`  Diurnal range Aug-Sep: ${fmt(m.dtrAugSep, 1)} °C ${dtrVerdict(m.dtrAugSep)}.`);
+    lines.push(
+      `  Spring frost (Tmin≤−2 °C, Mar-Apr, schema-aligned): ${fmt(s.springFrostT2MarApr, 1)} days.`,
+    );
+    lines.push(
+      `  Flowering rain (May, approx for May 25-Jun 15 window): ${fmt(s.floweringRainMay, 0)} mm.`,
+    );
+  } else {
+    lines.push(`  Heat-stress days (Tmax≥35 °C): ${fmt(m.heatDays, 1)} in growing season.`);
+    lines.push(
+      `  Cool-night index ~${fmt(m.coolNight, 1)} °C (Sept Tmin approx; ${coolNightVerdict(m.coolNight)}).`,
+    );
+    lines.push(`  Diurnal range Aug-Sep: ${fmt(m.dtrAugSep, 1)} °C ${dtrVerdict(m.dtrAugSep)}.`);
+    lines.push(`  Spring frost: ${fmt(m.frostDays, 1)} days ≤0 °C Apr-May.`);
+  }
   lines.push(`  Winter precipitation ${fmt(m.winRain, 0)} mm Oct(prev)-Mar.`);
   lines.push(`  Huglin index ~${fmt(m.huglin, 0)} (approx from GDD10+DTR).`);
   lines.push(`Overall: ${overallVerdict(m)}.`);
@@ -264,6 +392,7 @@ function buildHistoricalNotes(
   yearClamped: boolean,
   requestedYear: number,
   maxYear: number,
+  hasSchemaWindows: boolean,
 ): string[] {
   const notes: string[] = [];
   if (yearClamped) {
@@ -280,9 +409,15 @@ function buildHistoricalNotes(
   notes.push(
     "Harvest rain may be under-estimated ~14% vs station truth; treat thresholds with caution.",
   );
-  notes.push(
-    "spring_frost_events column uses T≤0 °C / Apr-May; schema definition is T<−2 °C / Mar-Apr — interpret as a related but not identical signal.",
-  );
+  if (hasSchemaWindows) {
+    notes.push(
+      "Schema-aligned windows derived from monthly aggregates: heat_days (Jun-Sep), spring_frost_events (Mar-Apr Tmin≤−2°C), cool_night_index (mean Sept Tmin), extreme_max_temperature (peak Tmax Apr-Sep), flowering_rain (May only — approximates May 25-Jun 15 window).",
+    );
+  } else {
+    notes.push(
+      "Monthly aggregates unavailable for this row; schema windows fall back to vintage-level proxies (heat_days Apr-Sep, spring_frost Apr-May ≤0°C, cool_night from GST−DTR/2).",
+    );
+  }
   return notes;
 }
 
