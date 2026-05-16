@@ -30,7 +30,7 @@ export function ExportButton({ reportMarkdown, filename }: Props) {
         <button
           type="button"
           onClick={() => downloadMarkdown(filename ?? "wine-signals-report.md", reportMarkdown)}
-          className="rounded-sm border bg-background px-4 py-2 text-[10px] uppercase tracking-luxe transition-colors hover:bg-muted"
+          className="chip transition-opacity hover:opacity-80"
         >
           {t("feature.report.download")}
         </button>
@@ -38,7 +38,7 @@ export function ExportButton({ reportMarkdown, filename }: Props) {
       <button
         type="button"
         onClick={() => window.print()}
-        className="rounded-sm border bg-background px-4 py-2 text-[10px] uppercase tracking-luxe transition-colors hover:bg-muted"
+        className="rounded-pill bg-foreground px-4 py-3 text-[11px] font-bold uppercase tracking-[0.22em] text-background hover:opacity-90 disabled:opacity-50"
       >
         {t("common.export_report")}
       </button>

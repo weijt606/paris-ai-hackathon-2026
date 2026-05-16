@@ -11,14 +11,14 @@ interface Props {
 export function RegionPicker({ value, onChange }: Props) {
   return (
     <label className="flex flex-col gap-2 text-sm">
-      <span className="text-[10px] uppercase tracking-luxe text-muted-foreground">Region</span>
+      <span className="kicker">Region</span>
       <select
         value={value}
         onChange={(e) => {
           const r = REGIONS.find((x) => x.id === e.target.value);
           if (r) onChange({ id: r.id, name: r.name, parent: r.parent });
         }}
-        className="h-10 rounded-sm border bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+        className="h-10 rounded-md border border-line bg-surface-2 px-3 text-sm transition-colors focus:border-line-strong focus:bg-surface-3 focus:outline-none"
       >
         <optgroup label="Burgundy">
           {REGIONS.filter((r) => r.parent === "burgundy").map((r) => (

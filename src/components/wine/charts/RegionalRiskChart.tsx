@@ -28,8 +28,8 @@ export function RegionalRiskChart({ selectedId }: { selectedId: string }) {
     active: b.id === selectedId,
   }));
   return (
-    <figure className="rounded-md border bg-card p-6">
-      <figcaption className="mb-4 text-[10px] uppercase tracking-luxe text-muted-foreground">
+    <figure className="card-lg p-6">
+      <figcaption className="kicker mb-4">
         {t("trade.charts.regional")}
       </figcaption>
       <ResponsiveContainer width="100%" height={220}>
@@ -37,7 +37,7 @@ export function RegionalRiskChart({ selectedId }: { selectedId: string }) {
           <XAxis
             dataKey="name"
             interval={0}
-            stroke="hsl(var(--muted-foreground))"
+            stroke="hsl(var(--soft))"
             fontSize={10}
             angle={-15}
             textAnchor="end"
@@ -47,16 +47,16 @@ export function RegionalRiskChart({ selectedId }: { selectedId: string }) {
           />
           <YAxis
             domain={[0, 100]}
-            stroke="hsl(var(--muted-foreground))"
+            stroke="hsl(var(--soft))"
             fontSize={10}
             tickLine={false}
             axisLine={false}
           />
           <Tooltip
-            cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }}
+            cursor={{ fill: "var(--surface-2)", opacity: 0.4 }}
             contentStyle={{
-              background: "hsl(var(--background))",
-              border: "1px solid hsl(var(--border))",
+              background: "var(--panel)",
+              border: "1px solid var(--line)",
               borderRadius: 6,
               fontSize: 12,
             }}

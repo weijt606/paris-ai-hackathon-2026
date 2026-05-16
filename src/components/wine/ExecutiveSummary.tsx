@@ -14,8 +14,8 @@ interface Props {
 export function ExecutiveSummary({ text }: Props) {
   const t = useT();
   return (
-    <article className="rounded-md border bg-card p-6">
-      <p className="text-[10px] uppercase tracking-luxe text-muted-foreground">
+    <article className="card-lg p-6">
+      <p className="kicker">
         {t("feature.summary.title")}
       </p>
       <p className="mt-3 font-serif text-2xl leading-snug text-foreground">

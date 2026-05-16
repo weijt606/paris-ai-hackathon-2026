@@ -15,33 +15,56 @@ behind.
 ## 1. System architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│  /                — EntryChoice (vineyard / trade) + EN/FR locale   │
-├─────────────────────────────────────────────────────────────────────┤
-│  /vineyard                                  /trade                   │
-│   • Region + Timeframe picker                 • Timeframe picker     │
-│   • UploadArea (drag-drop, metadata-only)     • Wide Bordeaux map    │
-│   • Optional focus-question textarea            (61 châteaux × 1855) │
-│   • Bordeaux map (shared component)           • Run + 7-card cascade │
-│   • Run + 6-card progressive cascade          • Export + Subscribe   │
-└────────────────────────┬────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│  /                — EntryChoice (vineyard / trade) + light/dark + EN/FR  │
+├──────────────────────────────────────────────────────────────────────────┤
+│  AtlasShell — 3-column shell shared by /vineyard and /trade              │
+│  ┌────────────┬───────────────────────────────┬──────────────────────┐   │
+│  │ LEFT       │ CENTRE  · BordeauxMap         │ RIGHT                │   │
+│  │ List or    │ 61 1855 classés on            │ Detail panel         │   │
+│  │ region     │ CARTO dark/light tiles        │ (terroir / controls) │   │
+│  │ sidebar    │ click → flyTo (memoised)      │ Persona tabs / Run   │   │
+│  └────────────┴───────────────────────────────┴──────────────────────┘   │
+│                      ▲                                                   │
+│        Run click ────┴──── overlays drawer above the centre column:      │
+│                                                                          │
+│        WorkflowHero (during run): rotating headline · elapsed/progress   │
+│        /active KV grid · agent DAG · event ticker                        │
+│                                                                          │
+│        On result: hero enters completion gate (timer freezes, dot turns  │
+│        emerald) → "View report →" button → AnalysisDrawer takes over    │
+│        the drawer slot.                                                  │
+└────────────────────────┬─────────────────────────────────────────────────┘
                          │ POST /api/analyze
                          ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  Orchestrator  (src/lib/agents/orchestrator.ts)                     │
-│   OpenAI Chat Completions tool-use loop · routing only · do NOT edit│
-│   • Registers every SubAgent → OpenAI function tool                 │
-│   • Dispatches tool_calls → runAgentSafely → collects trace[]       │
-│   • In-memory cache (30 min TTL, 64 LRU) keyed on (region · persona │
-│     · timeframe · question · chateau · upload-meta)                 │
-│   • Auto-detects backtest mode when timeframe.end < today           │
-│   • Harvests extraction + feature + geo + backtest into AnalyzeResult│
-└────────────────────────┬────────────────────────────────────────────┘
-                         │ parallel calls
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Orchestrator  (src/lib/agents/orchestrator.ts)                          │
+│                                                                          │
+│   Two paths, selected by NEXT_PUBLIC_DEMO_FAST:                          │
+│                                                                          │
+│   • DEMO_FAST=true (default)  ─ directDispatch()                         │
+│     Fixed-order pipeline — saves 5-7 GPT routing roundtrips.             │
+│     phase 1: weather + geo                (parallel, <50 ms)             │
+│     phase 2: tavily + extraction          (parallel; extraction runs     │
+│                                            on weather+geo signals only)  │
+│     phase 3: feature + backtest           (parallel when backtest fires) │
+│                                                                          │
+│   • DEMO_FAST=false ─ OpenAI Chat Completions tool-use loop              │
+│     Registers each SubAgent as a function tool; the LLM decides what     │
+│     to call when. Slower (~80 s cold) but adaptive.                      │
+│                                                                          │
+│   Both paths share:                                                      │
+│   • In-memory cache (30 min TTL, 64 LRU) keyed on input                  │
+│   • Auto-detect backtest when timeframe.end < today                      │
+│   • Harvest extraction + feature + geo + backtest → AnalyzeResult        │
+└────────────────────────┬─────────────────────────────────────────────────┘
+                         │ parallel calls (per the path above)
        ┌─────────────────┼─────────────────┐
        ▼                 ▼                 ▼
  weather_agent      geo_agent        tavily_agent
- (climate signals)  (terroir + AOC)  (public-web grounding)
+ (climate signals)  (terroir + AOC)  (public-web grounding +
+                                      SQLite cache pre-hydrated from
+                                      data/tavily-cache-export.json)
        │                 │                 │
        └─────────────────┼─────────────────┘
                          ▼
@@ -51,11 +74,11 @@ behind.
                   risk inverted)
                          │
                          ▼
-                  feature_agent            ← exec summary, report,
-                  3-tier:                    email digest
-                  1. Pioneer (small open    (Pioneer-hosted is the
-                     OSS LLM)                 primary; OpenAI is the
-                  2. OpenAI structured       fallback for strict schema)
+                  feature_agent            ← exec summary, structured
+                  3-tier:                    markdown report, email digest
+                  1. Pioneer (small open    (DEMO_FAST=true → skip tier 1,
+                     OSS LLM)                go straight to OpenAI tier 2)
+                  2. OpenAI structured
                   3. Deterministic template
                          │
                          ▼ (only if timeframe is historical)
@@ -78,21 +101,32 @@ behind.
 
 | File | Purpose | Status |
 |---|---|---|
-| `src/lib/agents/orchestrator.ts` | OpenAI tool-use routing + cache | ✅ stable — do not edit |
+| `src/lib/agents/orchestrator.ts` | Tool-use routing + cache + `directDispatch()` for demo-fast | ✅ stable — do not edit |
 | `src/lib/agents/types.ts` | `SubAgent`, `AgentResult`, `AgentContext` | ✅ stable — do not edit |
 | `src/lib/agents/sub-agents/weather.ts` | ERA5 1990-2024 + NASA POWER 2025 + SEAS5 2026 + DEM downscaling | ✅ wired |
 | `src/lib/agents/sub-agents/geo.ts` | 61-château 1855 dataset, microtopo, AOC envelope | ✅ wired |
 | `src/lib/agents/sub-agents/tavily.ts` | 5-source-type public-web harness | ✅ wired |
-| `src/lib/agents/sub-agents/tavily-cache.ts` | SQLite (`node:sqlite`) 7-day result cache | ✅ wired |
+| `src/lib/agents/sub-agents/tavily-cache.ts` | SQLite 7-day cache + idempotent hydration from export JSON | ✅ wired |
 | `src/lib/agents/sub-agents/backtest.ts` | Critic retrieval + verdict comparison | ✅ wired |
-| `src/lib/agents/extraction.ts` | Vintage-quality schema scoring (28 features × 6 gates × 11 adjustments) | ✅ wired |
-| `src/lib/agents/feature.ts` | 3-tier narrative generator (Pioneer → OpenAI → template) | ✅ wired |
+| `src/lib/agents/extraction.ts` | Vintage-quality schema scoring (28 features × 6 gates × 11 adjustments) + persona-lens injection | ✅ wired |
+| `src/lib/agents/feature.ts` | 3-tier narrative generator (Pioneer → OpenAI → template) with structured-report prompts | ✅ wired |
 | `src/lib/training/pioneer.ts` | Pioneer.ai chat-completions adapter | ✅ wired |
 | `src/lib/ai/openai.ts` | OpenAI client + helpers | ✅ wired |
-| `src/lib/wine/types.ts` | `AnalyzeInput` / `AnalyzeResult` / drivers / backtest / geoSnapshot | ✅ shared FE+BE |
+| `src/lib/env.ts` | zod env + `openaiModelForAgents()` + `isDemoFast` / `isDemoMode` | ✅ stable |
+| `src/lib/wine/types.ts` | `AnalyzeInput` / `AnalyzeResult` / `TradePersona` / `BacktestSnapshot` / `GeoSnapshot` | ✅ shared FE+BE |
 | `src/lib/wine/regions.ts` | Burgundy + Bordeaux static region list | ✅ wired |
+| `src/lib/wine/products.ts` | 80-entry curated wine catalog (61 1855 classés + 21 Burgundy crus) | ✅ wired |
+| `src/lib/wine/chateaux-static.json` | Client-safe 61-château dataset (joined fields) | ✅ shared FE+BE |
+| `data/tavily-cache-export.json` | Pre-warmed Tavily cache payload for demo | ✅ committed |
 | `src/app/api/analyze/route.ts` | POST entry point with zod validation | ✅ stable |
-| `src/components/wine/*` | Dashboard UI (top-down layout, Run modal, progressive reveal) | ✅ wired |
+| `src/components/wine/atlas/AtlasShell.tsx` | 3-column shell + overlay drawer + Escape-to-close | ✅ wired |
+| `src/components/wine/atlas/WorkflowHero.tsx` | Cinematic during-run stage + **completion gate** with View-report button | ✅ wired |
+| `src/components/wine/atlas/AnalysisDrawer.tsx` | Result-stack drawer body (ExecutiveSummary → BacktestCard → RiskCard+RiskBandLegend → TerroirCard → charts → FullReportCard) | ✅ wired |
+| `src/components/wine/atlas/{ChateauListSidebar,ChateauDetailPanel,VineyardSidebar,VineyardControls}.tsx` | Shell column bodies | ✅ wired |
+| `src/components/wine/{RiskCard,RiskBandLegend,FullReportCard,BacktestCard,ExecutiveSummary,TerroirCard}.tsx` | Result cards | ✅ wired |
+| `src/components/wine/trade/{TradeDashboard,BordeauxMap,ProductPicker,TradePersonaTabs}.tsx` | Trade composition + map + product catalog combobox + persona segmented switch | ✅ wired |
+| `src/components/wine/vineyard/{VineyardDashboard,UploadArea}.tsx` | Vineyard composition + dropzone | ✅ wired |
+| `src/components/ThemeToggle.tsx` | Light/dark toggle backed by an inline boot script | ✅ wired |
 | `src/lib/demo/fixtures.ts` | Demo-mode fixtures (H3 contract) | ✅ wired |
 
 ---
@@ -283,19 +317,32 @@ NEXT_PUBLIC_DEMO_MODE=true pnpm dev
 
 ## 7. Caching layers
 
-Two independent caches keep the live system snappy:
+Three independent caches keep the live system snappy:
 
 1. **Orchestrator cache** (`src/lib/agents/orchestrator.ts`)
    In-memory `Map`, 30-min TTL, 64-entry LRU, keyed on
-   `(region, persona, timeframe, question, chateau, upload-meta-hash)`.
-   Skips the entire tool-use loop on a hit. Cleared on process restart.
+   `(region, persona, tradePersona, timeframe, question, chateau,
+   upload-meta-hash)`. Skips the entire pipeline (both demo-fast direct
+   dispatch and the legacy GPT loop) on a hit. Cleared on process
+   restart.
 
-2. **Tavily cache** (`src/lib/agents/sub-agents/tavily-cache.ts`)
-   SQLite (`node:sqlite`), 7-day TTL, keyed on a SHA-256 of the search
-   query + filters. Survives process restarts.
+2. **Tavily SQLite cache** (`src/lib/agents/sub-agents/tavily-cache.ts`)
+   `node:sqlite`, 7-day TTL, keyed on a SHA-256 of the search query +
+   filters + chateau scope. Survives process restarts. Lazy-opened on
+   the first read.
 
-Neither cache is touched on demo mode (demo path short-circuits before
-they're consulted).
+3. **Tavily cache hydration** (same file)
+   On first DB open, idempotently inserts entries from
+   `data/tavily-cache-export.json` via `INSERT OR IGNORE`. The export
+   file is produced by `scripts/export-tavily-cache.ts` and committed
+   so the demo machine ships with a pre-warmed cache — cold queries
+   for the curated demo path skip the Tavily network round-trip
+   entirely. Looking for `[tavily-cache] hydrated N entries from
+   export` in stdout confirms it ran.
+
+Neither the orchestrator nor the Tavily caches are touched on demo
+mode (`NEXT_PUBLIC_DEMO_MODE=true`); that path short-circuits before
+they're consulted.
 
 ---
 
@@ -338,8 +385,12 @@ they're consulted).
 | What does sub-agent X already do? | §4 state of the art |
 | What's the API response shape? | §5 |
 | How do I test offline? | §6 demo mode |
-| Why is this slow on a cold call? | §7 — first call misses both caches |
+| Why is this slow on a cold call? | §7 — first call misses all three caches |
+| Why direct-dispatch instead of LLM routing? | §1 — fixed-order pipeline saves 5-7 GPT roundtrips |
 | What goes in a PR? | §8 |
 | How are OpenAI / Tavily / Pioneer wired? | [`SPONSORS.md`](SPONSORS.md) |
+| Where do UI primitives live? | `src/components/wine/atlas/*` (shell) + `src/components/wine/*` (cards) |
+| How does the View-report gate work? | `WorkflowHero.tsx` — `done` + `onContinue` props |
+| How does light/dark mode work? | `src/components/ThemeToggle.tsx` + inline boot script in `layout.tsx` |
 
 Questions → open an issue or a draft PR. Don't block on chat.

@@ -49,7 +49,7 @@ export function SubscribeDialog({ regionId, persona, digestPreview }: Props) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-sm border bg-background px-4 py-2 text-[10px] uppercase tracking-luxe transition-colors hover:bg-muted print:hidden"
+        className="chip print:hidden"
       >
         {t("common.subscribe")}
       </button>
@@ -60,24 +60,20 @@ export function SubscribeDialog({ regionId, persona, digestPreview }: Props) {
           onClick={() => !submitting && setOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-md border bg-background p-8 shadow-sm"
+            className="glass-strong w-full max-w-md rounded-card p-8 panel-shadow"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-[10px] uppercase tracking-luxe text-muted-foreground">
-              {t("common.subscribe")}
-            </p>
+            <p className="kicker">{t("common.subscribe")}</p>
             <h3 className="mt-2 font-serif text-3xl font-medium leading-tight">
               {t("subscribe.title")}
             </h3>
-            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+            <p className="mt-3 text-sm leading-relaxed text-soft">
               {t("subscribe.description")}
             </p>
 
             {digestPreview && (
-              <div className="mt-5 rounded-sm border bg-muted/40 p-4">
-                <p className="text-[10px] uppercase tracking-luxe text-muted-foreground">
-                  {t("subscribe.preview_label")}
-                </p>
+              <div className="mt-5 rounded-md border border-line bg-surface-2 p-4">
+                <p className="kicker">{t("subscribe.preview_label")}</p>
                 <pre className="mt-2 whitespace-pre-wrap font-sans text-xs leading-relaxed text-foreground">
                   {digestPreview}
                 </pre>
@@ -96,11 +92,11 @@ export function SubscribeDialog({ regionId, persona, digestPreview }: Props) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder={t("subscribe.email_placeholder")}
-                  className="w-full rounded-sm border bg-background px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="w-full rounded-md border border-line bg-surface-2 px-4 py-2.5 text-sm focus:border-line-strong focus:bg-surface-3 focus:outline-none"
                   disabled={submitting}
                 />
                 {error && (
-                  <p className="rounded-sm border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                     {error}
                   </p>
                 )}
@@ -109,14 +105,14 @@ export function SubscribeDialog({ regionId, persona, digestPreview }: Props) {
                     type="button"
                     onClick={() => setOpen(false)}
                     disabled={submitting}
-                    className="rounded-sm px-4 py-2 text-[10px] uppercase tracking-luxe text-muted-foreground hover:text-foreground"
+                    className="chip"
                   >
                     {t("common.cancel")}
                   </button>
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="rounded-sm bg-primary px-5 py-2 text-[10px] uppercase tracking-luxe text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+                    className="rounded-pill bg-foreground px-5 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-background transition-opacity hover:opacity-90 disabled:opacity-50"
                   >
                     {submitting ? t("common.running") : t("common.confirm")}
                   </button>
