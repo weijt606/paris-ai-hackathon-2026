@@ -8,9 +8,9 @@ export function ExportButton() {
     <button
       type="button"
       onClick={() => window.print()}
-      className="rounded-md border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted print:hidden"
+      className="rounded-sm border bg-background px-4 py-2 text-[10px] uppercase tracking-luxe transition-colors hover:bg-muted print:hidden"
     >
-      📄 {t("common.export_report")}
+      {t("common.export_report")}
     </button>
   );
 }

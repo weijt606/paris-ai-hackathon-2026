@@ -10,21 +10,22 @@ interface Props {
   onSelect: (id: string, name: string) => void;
 }
 
+// Match RegionalRiskChart palette for visual coherence.
 function colorForScore(score: number): string {
-  if (score < 40) return "#10b981";
-  if (score < 55) return "#f59e0b";
-  if (score < 70) return "#ef4444";
-  return "#7f1d1d";
+  if (score < 40) return "hsl(var(--chart-3))";
+  if (score < 55) return "hsl(var(--chart-5))";
+  if (score < 70) return "hsl(var(--chart-2))";
+  return "hsl(var(--chart-1))";
 }
 
 export function BordeauxMap({ selectedId, onSelect }: Props) {
   const t = useT();
   return (
-    <div className="rounded-xl border p-4">
-      <h3 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+    <figure className="rounded-md border bg-card p-6">
+      <figcaption className="mb-4 text-[10px] uppercase tracking-luxe text-muted-foreground">
         {t("trade.map.title")}
-      </h3>
-      <div className="aspect-[5/4] w-full overflow-hidden rounded-lg bg-muted/30">
+      </figcaption>
+      <div className="aspect-[5/4] w-full overflow-hidden">
         <ComposableMap
           projection="geoMercator"
           projectionConfig={{ center: [-0.5, 44.85], scale: 7500 }}
@@ -38,7 +39,8 @@ export function BordeauxMap({ selectedId, onSelect }: Props) {
                 <Geography
                   key={geo.rsmKey}
                   geography={geo}
-                  fill="hsl(var(--background))"
+                  fill="hsl(var(--muted))"
+                  fillOpacity={0.45}
                   stroke="hsl(var(--border))"
                   strokeWidth={0.6}
                   style={{
@@ -52,22 +54,37 @@ export function BordeauxMap({ selectedId, onSelect }: Props) {
           </Geographies>
           {BORDEAUX_BENCHMARKS.map((b) => {
             const active = b.id === selectedId;
+            const color = colorForScore(b.score);
             return (
               <Marker key={b.id} coordinates={[b.lng, b.lat]}>
+                {active && (
+                  // soft halo for selected
+                  <circle
+                    r={18}
+                    fill={color}
+                    fillOpacity={0.18}
+                    style={{ transition: "all 300ms ease-out" }}
+                  />
+                )}
                 <circle
-                  r={active ? 12 : 8}
-                  fill={colorForScore(b.score)}
-                  stroke={active ? "hsl(var(--foreground))" : "#fff"}
-                  strokeWidth={active ? 2.5 : 1.2}
-                  className="cursor-pointer transition-all"
-                  style={{ filter: active ? "drop-shadow(0 0 4px rgba(0,0,0,0.3))" : undefined }}
+                  r={active ? 7 : 5}
+                  fill={color}
+                  stroke="hsl(var(--background))"
+                  strokeWidth={1.5}
+                  className="cursor-pointer"
+                  style={{ transition: "r 250ms ease-out, fill 250ms ease-out" }}
                   onClick={() => onSelect(b.id, b.name)}
                 />
                 <text
                   textAnchor="middle"
-                  y={active ? -16 : -12}
-                  className="pointer-events-none select-none fill-current text-[10px] font-medium"
-                  style={{ fontWeight: active ? 700 : 500 }}
+                  y={active ? -14 : -11}
+                  className="pointer-events-none select-none fill-foreground"
+                  style={{
+                    fontSize: 9.5,
+                    fontWeight: active ? 600 : 400,
+                    letterSpacing: "0.02em",
+                    transition: "all 250ms ease-out",
+                  }}
                 >
                   {b.name}
                 </text>
@@ -76,20 +93,29 @@ export function BordeauxMap({ selectedId, onSelect }: Props) {
           })}
         </ComposableMap>
       </div>
-      <div className="mt-3 flex items-center justify-end gap-4 text-[10px] uppercase tracking-wide text-muted-foreground">
-        <span className="inline-flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full bg-emerald-500" />
+      <div className="mt-2 flex items-center justify-end gap-6 text-[10px] uppercase tracking-luxe text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            className="inline-block h-1.5 w-1.5 rounded-full"
+            style={{ background: "hsl(var(--chart-3))" }}
+          />
           {t("trade.map.legend_low")}
         </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full bg-amber-500" />
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            className="inline-block h-1.5 w-1.5 rounded-full"
+            style={{ background: "hsl(var(--chart-5))" }}
+          />
           {t("result.band.elevated")}
         </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full bg-red-600" />
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            className="inline-block h-1.5 w-1.5 rounded-full"
+            style={{ background: "hsl(var(--chart-1))" }}
+          />
           {t("trade.map.legend_high")}
         </span>
       </div>
-    </div>
+    </figure>
   );
 }

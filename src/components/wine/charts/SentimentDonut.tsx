@@ -5,19 +5,19 @@ import { useT } from "@/lib/i18n/Provider";
 import { demoSentiment, type SentimentSlice } from "@/lib/demo/charts";
 
 const COLORS: Record<SentimentSlice["label"], string> = {
-  positive: "#10b981",
-  neutral: "#a1a1aa",
-  negative: "#ef4444",
+  positive: "hsl(var(--chart-3))",   // sage
+  neutral: "hsl(var(--muted-foreground) / 0.45)",
+  negative: "hsl(var(--chart-1))",   // bordeaux
 };
 
 export function SentimentDonut({ regionId }: { regionId: string }) {
   const t = useT();
   const data = demoSentiment(regionId);
   return (
-    <div className="rounded-xl border p-4">
-      <h3 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+    <figure className="rounded-md border bg-card p-6">
+      <figcaption className="mb-4 text-[10px] uppercase tracking-luxe text-muted-foreground">
         {t("trade.charts.sentiment")}
-      </h3>
+      </figcaption>
       <ResponsiveContainer width="100%" height={220}>
         <PieChart>
           <Pie
@@ -26,9 +26,13 @@ export function SentimentDonut({ regionId }: { regionId: string }) {
             nameKey="label"
             cx="50%"
             cy="50%"
-            innerRadius={50}
-            outerRadius={80}
+            innerRadius={56}
+            outerRadius={86}
             paddingAngle={2}
+            stroke="hsl(var(--background))"
+            strokeWidth={2}
+            animationDuration={900}
+            animationEasing="ease-out"
           >
             {data.map((d) => (
               <Cell key={d.label} fill={COLORS[d.label]} />
@@ -38,21 +42,24 @@ export function SentimentDonut({ regionId }: { regionId: string }) {
             contentStyle={{
               background: "hsl(var(--background))",
               border: "1px solid hsl(var(--border))",
-              borderRadius: 8,
+              borderRadius: 6,
               fontSize: 12,
             }}
             formatter={(v, n) => [`${v}%`, String(n ?? "")]}
           />
         </PieChart>
       </ResponsiveContainer>
-      <div className="mt-2 flex justify-center gap-4 text-[10px] uppercase tracking-wide text-muted-foreground">
+      <div className="mt-1 flex justify-center gap-5 text-[10px] uppercase tracking-luxe text-muted-foreground">
         {data.map((d) => (
-          <span key={d.label} className="inline-flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full" style={{ background: COLORS[d.label] }} />
-            {d.label} {d.value}%
+          <span key={d.label} className="inline-flex items-center gap-1.5">
+            <span
+              className="inline-block h-1.5 w-1.5 rounded-full"
+              style={{ background: COLORS[d.label] }}
+            />
+            {d.label} · {d.value}%
           </span>
         ))}
       </div>
-    </div>
+    </figure>
   );
 }

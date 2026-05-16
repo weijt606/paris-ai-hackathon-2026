@@ -12,11 +12,12 @@ import {
 import { useT } from "@/lib/i18n/Provider";
 import { BORDEAUX_BENCHMARKS } from "@/lib/wine/bordeaux-benchmarks";
 
+// Score gradient: sage → gold → cognac → bordeaux.
 function color(score: number): string {
-  if (score < 40) return "#10b981";
-  if (score < 55) return "#f59e0b";
-  if (score < 70) return "#ef4444";
-  return "#7f1d1d";
+  if (score < 40) return "hsl(var(--chart-3))";
+  if (score < 55) return "hsl(var(--chart-5))";
+  if (score < 70) return "hsl(var(--chart-2))";
+  return "hsl(var(--chart-1))";
 }
 
 export function RegionalRiskChart({ selectedId }: { selectedId: string }) {
@@ -27,35 +28,52 @@ export function RegionalRiskChart({ selectedId }: { selectedId: string }) {
     active: b.id === selectedId,
   }));
   return (
-    <div className="rounded-xl border p-4">
-      <h3 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+    <figure className="rounded-md border bg-card p-6">
+      <figcaption className="mb-4 text-[10px] uppercase tracking-luxe text-muted-foreground">
         {t("trade.charts.regional")}
-      </h3>
+      </figcaption>
       <ResponsiveContainer width="100%" height={220}>
-        <BarChart data={data} margin={{ left: 0, right: 12, top: 6 }}>
-          <XAxis dataKey="name" interval={0} fontSize={10} angle={-15} textAnchor="end" height={50} />
-          <YAxis domain={[0, 100]} fontSize={10} />
+        <BarChart data={data} margin={{ left: 0, right: 8, top: 4 }}>
+          <XAxis
+            dataKey="name"
+            interval={0}
+            stroke="hsl(var(--muted-foreground))"
+            fontSize={10}
+            angle={-15}
+            textAnchor="end"
+            height={54}
+            tickLine={false}
+            axisLine={false}
+          />
+          <YAxis
+            domain={[0, 100]}
+            stroke="hsl(var(--muted-foreground))"
+            fontSize={10}
+            tickLine={false}
+            axisLine={false}
+          />
           <Tooltip
+            cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }}
             contentStyle={{
               background: "hsl(var(--background))",
               border: "1px solid hsl(var(--border))",
-              borderRadius: 8,
+              borderRadius: 6,
               fontSize: 12,
             }}
             formatter={(v) => [`${v}`, "score"]}
           />
-          <Bar dataKey="score" radius={[4, 4, 0, 0]}>
+          <Bar dataKey="score" radius={[3, 3, 0, 0]} animationDuration={800} animationEasing="ease-out">
             {data.map((d) => (
               <Cell
                 key={d.name}
                 fill={color(d.score)}
-                stroke={d.active ? "hsl(var(--foreground))" : undefined}
-                strokeWidth={d.active ? 2 : 0}
+                stroke={d.active ? "hsl(var(--foreground))" : "transparent"}
+                strokeWidth={d.active ? 1.5 : 0}
               />
             ))}
           </Bar>
         </BarChart>
       </ResponsiveContainer>
-    </div>
+    </figure>
   );
 }
