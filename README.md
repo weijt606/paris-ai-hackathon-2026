@@ -173,7 +173,7 @@ The system is a pipeline of OpenAI-driven agents wired by a single tool-use loop
 
 | Agent | Backend | Output format | Source / grounding |
 |---|---|---|---|
-| **Orchestrator** | OpenAI Chat Completions (`OPENAI_MODEL`, gpt-4o-mini default) | `tool_calls` | tool descriptors built from each SubAgent's `input_schema` |
+| **Orchestrator** | OpenAI Chat Completions (`OPENAI_MODEL`, **gpt-4o-mini recommended** — see note below) | `tool_calls` | tool descriptors built from each SubAgent's `input_schema` |
 | **weather_agent** | bundled CSV reads (no API) | structured `WeatherSignals` | `data/climate_features_downscaled.csv` (1990-2024 ERA5 DEM-downscaled) + `data/climate_features_forecast_2026.csv` (ECMWF SEAS5 ensemble) |
 | **geo_agent** | bundled CSV reads (no API) | structured `GeoSignals` | `data/{chateaux,static_geo,microtopo}.csv` joined on château name |
 | **tavily_agent** | Tavily Search API (real) | structured `TavilySignals` | 5-channel Bordeaux harness (sentiment / policy / regulation / winemaker / market) with trusted-domain weights; **SQLite 7-day cache** (`tavily-cache.ts`, `node:sqlite`) so repeat queries are free |
@@ -181,6 +181,8 @@ The system is a pipeline of OpenAI-driven agents wired by a single tool-use loop
 | **Feature — tier 1** | Pioneer.ai chat completions (`PIONEER_MODEL_ID`) | `response_format: json_object` + prompt-enforced shape | own JSON contract in system prompt |
 | **Feature — tier 2** | OpenAI Chat Completions (`OPENAI_MODEL`) | `response_format: json_schema` (strict) | own response schema (fallback) |
 | **Orchestrator result cache** | in-memory `Map` | `AnalyzeResult` | keyed on (region · persona · timeframe · question · château · uploads-meta); 30 min TTL, LRU 64 entries |
+
+**Model choice note** — pick `gpt-4o-mini` for `OPENAI_MODEL`. Reasoning models (gpt-5*, o-series) take **20–40s per call** because they do internal "thinking" before responding, AND they reject custom temperature, AND they don't improve quality on this task (structured JSON emission against a deterministic schema). gpt-4o-mini does the same work in ~3–6s. The orchestrator-level cache absorbs second-runs anyway, so saving the first-run latency matters most.
 
 ### Degradation ladder
 
