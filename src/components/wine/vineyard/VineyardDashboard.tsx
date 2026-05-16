@@ -1,12 +1,26 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { useT } from "@/lib/i18n/Provider";
 import { ExecutiveSummary } from "@/components/wine/ExecutiveSummary";
 import { RegionPicker } from "@/components/wine/RegionPicker";
 import { RiskCard } from "@/components/wine/RiskCard";
 import { TerroirCard } from "@/components/wine/TerroirCard";
 import { UploadArea } from "@/components/wine/vineyard/UploadArea";
+
+// Same client-only Leaflet trick as the trade dashboard — Leaflet touches
+// window/document at import time.
+const BordeauxMap = dynamic(
+  () =>
+    import("@/components/wine/trade/BordeauxMap").then((m) => m.BordeauxMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="aspect-[5/4] w-full animate-pulse rounded-md border bg-muted/40" />
+    ),
+  },
+);
 import { DriverDonutChart } from "@/components/wine/charts/DriverDonutChart";
 import { WeatherLineChart } from "@/components/wine/charts/WeatherLineChart";
 import { ExportButton } from "@/components/wine/shared/ExportButton";
@@ -30,6 +44,7 @@ export function VineyardDashboard() {
     name: first.name,
     parent: first.parent,
   });
+  const [chateau, setChateau] = useState<{ name: string; aoc: string } | null>(null);
   const [timeframe, setTimeframe] = useState(defaultTimeframe);
   const [question, setQuestion] = useState("");
   const [uploads, setUploads] = useState<UploadMeta[]>([]);
@@ -42,6 +57,7 @@ export function VineyardDashboard() {
       persona: "vineyard",
       question: question.trim() || undefined,
       uploads: uploads.length > 0 ? uploads : undefined,
+      chateau: chateau?.name,
     };
     void run(body);
   }
@@ -75,6 +91,17 @@ export function VineyardDashboard() {
 
       <div className="grid gap-8 lg:grid-cols-[360px_1fr]">
         <aside className="space-y-6 print:hidden">
+          <BordeauxMap
+            selectedChateau={chateau?.name ?? null}
+            onChateauSelect={(c) => {
+              if (c) {
+                setChateau({ name: c.name, aoc: c.aoc });
+                setRegion({ id: c.regionId, name: c.regionName, parent: "bordeaux" });
+              } else {
+                setChateau(null);
+              }
+            }}
+          />
           <RegionPicker value={region.id} onChange={setRegion} />
           <TimeframePicker value={timeframe} onChange={setTimeframe} />
           <UploadArea uploads={uploads} onChange={setUploads} />

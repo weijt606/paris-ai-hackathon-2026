@@ -18,12 +18,11 @@ import { demoWeatherTimeseries } from "@/lib/demo/charts";
 
 const MONTH_SHORT_FR = ["janv", "févr", "mars", "avr", "mai", "juin", "juil", "août", "sept", "oct", "nov", "déc"];
 const MONTH_SHORT_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const MONTH_SHORT_ZH = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
 
-function shortMonth(yyyymm: string, locale: "fr" | "en" | "zh"): string {
+function shortMonth(yyyymm: string, locale: "fr" | "en"): string {
   const m = parseInt(yyyymm.slice(-2), 10);
   if (Number.isNaN(m)) return yyyymm;
-  const table = locale === "fr" ? MONTH_SHORT_FR : locale === "zh" ? MONTH_SHORT_ZH : MONTH_SHORT_EN;
+  const table = locale === "fr" ? MONTH_SHORT_FR : MONTH_SHORT_EN;
   return table[m - 1] ?? yyyymm;
 }
 
@@ -38,8 +37,8 @@ export function WeatherLineChart({ regionId }: { regionId: string }) {
   const t = useT();
   // We don't have direct access to the active locale string here; we read it
   // out of the document if possible. Default to French for the month labels.
-  const locale =
-    (typeof document !== "undefined" && (document.documentElement.lang as "fr" | "en" | "zh")) || "fr";
+  const locale: "fr" | "en" =
+    (typeof document !== "undefined" && document.documentElement.lang === "fr") ? "fr" : "en";
   const data = demoWeatherTimeseries(regionId);
   const avgTemp = avg(data.map((d) => d.tempAnomalyC));
   const totalPrecip = sum(data.map((d) => d.precipMm));

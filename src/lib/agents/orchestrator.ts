@@ -87,6 +87,49 @@ Rules:
 
 const MAX_STEPS = 10;
 
+// ─── Result cache ──────────────────────────────────────────────────────
+// In-memory map of (cache-key → AnalyzeResult). Demo replays and repeated
+// "Run analysis" clicks for the same inputs return instantly instead of
+// re-burning 60s of LLM time. TTL keeps stale data from sticking around,
+// size cap keeps memory bounded. Survives a single dev-server process —
+// for cross-restart persistence we'd promote to SQLite (out of scope).
+const ANALYZE_CACHE = new Map<string, { result: AnalyzeResult; ts: number }>();
+const CACHE_TTL_MS = 30 * 60_000; // 30 min
+const CACHE_MAX_ENTRIES = 64;
+
+function cacheKey(input: AnalyzeInput): string {
+  return JSON.stringify({
+    r: input.region.id,
+    p: input.persona,
+    s: input.timeframe.start,
+    e: input.timeframe.end,
+    q: input.question ?? "",
+    c: input.chateau ?? "",
+    u: input.uploads?.map((f) => `${f.name}|${f.size}`).join(",") ?? "",
+  });
+}
+
+function cacheGet(key: string): AnalyzeResult | null {
+  const hit = ANALYZE_CACHE.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.ts > CACHE_TTL_MS) {
+    ANALYZE_CACHE.delete(key);
+    return null;
+  }
+  // Refresh insertion order — primitive LRU.
+  ANALYZE_CACHE.delete(key);
+  ANALYZE_CACHE.set(key, hit);
+  return hit.result;
+}
+
+function cachePut(key: string, result: AnalyzeResult): void {
+  if (ANALYZE_CACHE.size >= CACHE_MAX_ENTRIES) {
+    const oldest = ANALYZE_CACHE.keys().next().value;
+    if (oldest !== undefined) ANALYZE_CACHE.delete(oldest);
+  }
+  ANALYZE_CACHE.set(key, { result, ts: Date.now() });
+}
+
 export async function analyze(
   input: AnalyzeInput,
   opts: { signal?: AbortSignal } = {},
@@ -96,6 +139,10 @@ export async function analyze(
     const fixture = demoWineAnalysis(input);
     return { ...fixture, isDemoOrPartial: true };
   }
+
+  const key = cacheKey(input);
+  const cached = cacheGet(key);
+  if (cached) return cached;
 
   const ctx: AgentContext = {
     region: input.region,
@@ -188,7 +235,11 @@ export async function analyze(
     messages.push(...toolMessages);
   }
 
-  return harvest(input, trace);
+  const result = harvest(input, trace);
+  // Only cache non-partial results — partials (failed sub-agents, missing
+  // keys) shouldn't poison the cache for future requests.
+  if (!result.isDemoOrPartial) cachePut(key, result);
+  return result;
 }
 
 function harvest(input: AnalyzeInput, trace: AgentResult[]): AnalyzeResult {

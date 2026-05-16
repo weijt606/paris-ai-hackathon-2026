@@ -285,32 +285,47 @@ export function WorkflowTrace({ state, details, hasUploads = false }: Props) {
         ))}
       </svg>
 
-      {/* Compact step list — visible details for sub-agents + extraction. */}
-      <ul className="mt-4 space-y-1.5 text-[11px]">
-        {(["weather_agent", "geo_agent", "tavily_agent", "extraction_agent", "feature_agent"] as NodeKey[]).map((key) => {
+      {/* Step details — two-line per item so long summaries and 5-digit
+          durations don't fight for horizontal space. */}
+      <ul className="mt-5 space-y-3 text-[11px]">
+        {(
+          [
+            "weather_agent",
+            "geo_agent",
+            "tavily_agent",
+            "extraction_agent",
+            "feature_agent",
+          ] as NodeKey[]
+        ).map((key) => {
           const s = state[key];
           const d = details?.[key];
           const node = NODES[key];
+          const detailText =
+            s === "pending"
+              ? "—"
+              : s === "running"
+                ? `${t("workflow.state.running")}…`
+                : (d?.error ?? d?.summary ?? "—");
           return (
-            <li key={key} className="flex items-center gap-2.5">
-              <Dot state={s} />
-              <span className="w-[62px] shrink-0 text-[10px] uppercase tracking-luxe text-muted-foreground">
-                {node.label}
-              </span>
-              <span
+            <li key={key} className="space-y-1">
+              <div className="flex items-baseline gap-2">
+                <Dot state={s} />
+                <span className="text-[10px] uppercase tracking-luxe text-muted-foreground">
+                  {node.label}
+                </span>
+                <span className="ml-auto font-mono text-[10px] tabular-nums text-muted-foreground">
+                  {d?.durationMs !== undefined ? `${d.durationMs}ms` : ""}
+                </span>
+              </div>
+              <p
                 className={cn(
-                  "min-w-0 flex-1 truncate",
+                  "pl-4 break-words text-[11px] leading-relaxed",
                   s === "fail" ? "text-destructive" : "text-muted-foreground",
+                  s === "running" && "italic",
                 )}
-                title={d?.error ?? d?.summary ?? ""}
               >
-                {s === "pending" && "—"}
-                {s === "running" && <span className="italic">{t("workflow.state.running")}…</span>}
-                {(s === "ok" || s === "fail") && (d?.error ?? d?.summary ?? "—")}
-              </span>
-              <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
-                {d?.durationMs !== undefined ? `${d.durationMs}ms` : ""}
-              </span>
+                {detailText}
+              </p>
             </li>
           );
         })}
