@@ -1,5 +1,5 @@
 import "server-only";
-import { env, integrations, isDemoFast, isDemoMode } from "@/lib/env";
+import { env, integrations, isDemoMode } from "@/lib/env";
 import type { AgentContext, SubAgent } from "@/lib/agents/types";
 import { findRegion } from "@/lib/wine/regions";
 import {
@@ -128,10 +128,11 @@ type TavilySearchResponse = {
 
 const MAX_QUERY_COUNT = 200;
 const MAX_YEAR_SPAN = 16;
-// Demo-fast caps the per-query result count to 3 so each Tavily POST returns
-// faster and the downstream LLM payload is smaller (each result ships its
-// full content snippet to extraction/backtest).
-const DEFAULT_MAX_RESULTS_PER_QUERY = isDemoFast ? 3 : 5;
+// Per-query result cap. We keep this at 5 (not the demo-fast-reduced 3) so
+// extraction sees the full breadth of evidence — the top 3 vs top 5 ranking
+// boundary is exactly where mid-quality critic / négociant hits sit, and
+// dropping them measurably biases the driver weighting toward weather/geo.
+const DEFAULT_MAX_RESULTS_PER_QUERY = 5;
 const MIN_TAVILY_SCORE = 0.2;
 const REQUEST_TIMEOUT_MS = 8000;
 const MAX_RETRIES = 1;
