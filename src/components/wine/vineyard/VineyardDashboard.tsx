@@ -10,14 +10,14 @@ import { DriverBarChart } from "@/components/wine/charts/DriverBarChart";
 import { WeatherLineChart } from "@/components/wine/charts/WeatherLineChart";
 import { ExportButton } from "@/components/wine/shared/ExportButton";
 import { SubscribeDialog } from "@/components/wine/shared/SubscribeDialog";
+import { TimeframePicker } from "@/components/wine/shared/TimeframePicker";
 import { REGIONS } from "@/lib/wine/regions";
-import type { AnalyzeInput, AnalyzeResult, Region, UploadMeta } from "@/lib/wine/types";
+import type { AnalyzeInput, AnalyzeResult, Region, Timeframe, UploadMeta } from "@/lib/wine/types";
 
-function defaultTimeframe() {
-  const now = new Date();
-  const start = now.toISOString().slice(0, 10);
-  const end = new Date(now.getTime() + 90 * 24 * 3600 * 1000).toISOString().slice(0, 10);
-  return { start, end };
+function defaultTimeframe(): Timeframe {
+  // Default: current calendar (natural) year forecast.
+  const year = new Date().getFullYear();
+  return { start: `${year}-01-01`, end: `${year}-12-31` };
 }
 
 export function VineyardDashboard() {
@@ -85,30 +85,7 @@ export function VineyardDashboard() {
         <aside className="space-y-6 print:hidden">
           <RegionPicker value={region.id} onChange={setRegion} />
 
-          <div className="grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                {t("common.start_date")}
-              </span>
-              <input
-                type="date"
-                value={timeframe.start}
-                onChange={(e) => setTimeframe((tf) => ({ ...tf, start: e.target.value }))}
-                className="rounded-md border bg-background px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                {t("common.end_date")}
-              </span>
-              <input
-                type="date"
-                value={timeframe.end}
-                onChange={(e) => setTimeframe((tf) => ({ ...tf, end: e.target.value }))}
-                className="rounded-md border bg-background px-3 py-2 text-sm"
-              />
-            </label>
-          </div>
+          <TimeframePicker value={timeframe} onChange={setTimeframe} />
 
           <UploadArea uploads={uploads} onChange={setUploads} />
 
