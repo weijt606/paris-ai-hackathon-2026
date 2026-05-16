@@ -46,9 +46,9 @@ export function SubscribeDialog({ regionId, persona }: Props) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-md border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted print:hidden"
+        className="rounded-sm border bg-background px-4 py-2 text-[10px] uppercase tracking-luxe transition-colors hover:bg-muted print:hidden"
       >
-        ✉ {t("common.subscribe")}
+        {t("common.subscribe")}
       </button>
 
       {open && (
@@ -57,45 +57,52 @@ export function SubscribeDialog({ regionId, persona }: Props) {
           onClick={() => !submitting && setOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-xl border bg-background p-6 shadow-lg"
+            className="w-full max-w-md rounded-md border bg-background p-8 shadow-sm"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-lg font-semibold">{t("subscribe.title")}</h3>
-            <p className="mt-1 text-sm text-muted-foreground">{t("subscribe.description")}</p>
+            <p className="text-[10px] uppercase tracking-luxe text-muted-foreground">
+              {t("common.subscribe")}
+            </p>
+            <h3 className="mt-2 font-serif text-3xl font-medium leading-tight">
+              {t("subscribe.title")}
+            </h3>
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+              {t("subscribe.description")}
+            </p>
 
             {success ? (
               <p className="mt-6 rounded-md bg-emerald-500/15 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
                 ✓ {t("subscribe.success")}
               </p>
             ) : (
-              <form onSubmit={submit} className="mt-4 space-y-3">
+              <form onSubmit={submit} className="mt-6 space-y-4">
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder={t("subscribe.email_placeholder")}
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                  className="w-full rounded-sm border bg-background px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                   disabled={submitting}
                 />
                 {error && (
-                  <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  <p className="rounded-sm border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                     {error}
                   </p>
                 )}
-                <div className="flex justify-end gap-2">
+                <div className="flex justify-end gap-3 pt-2">
                   <button
                     type="button"
                     onClick={() => setOpen(false)}
                     disabled={submitting}
-                    className="rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted"
+                    className="rounded-sm px-4 py-2 text-[10px] uppercase tracking-luxe text-muted-foreground hover:text-foreground"
                   >
                     {t("common.cancel")}
                   </button>
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="rounded-md bg-foreground px-4 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
+                    className="rounded-sm bg-primary px-5 py-2 text-[10px] uppercase tracking-luxe text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
                   >
                     {submitting ? t("common.running") : t("common.confirm")}
                   </button>

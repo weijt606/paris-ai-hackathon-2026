@@ -121,9 +121,39 @@ export const DICT = {
     en: "Risk drivers",
   },
   "trade.charts.weather": {
-    zh: "气候趋势（近 6 个月）",
-    fr: "Tendances climatiques (6 derniers mois)",
-    en: "Weather trends (last 6 months)",
+    zh: "气候趋势（近 12 个月）",
+    fr: "Tendances climatiques (12 derniers mois)",
+    en: "Weather trends (last 12 months)",
+  },
+  "trade.charts.weather.temp": {
+    zh: "温度异常",
+    fr: "Anomalie thermique",
+    en: "Temp anomaly",
+  },
+  "trade.charts.weather.precip": {
+    zh: "降水",
+    fr: "Précipitations",
+    en: "Precipitation",
+  },
+  "trade.charts.weather.frost": {
+    zh: "霜冻日",
+    fr: "Jours de gel",
+    en: "Frost days",
+  },
+  "trade.charts.weather.avg_temp": {
+    zh: "年均偏差",
+    fr: "Anomalie moy.",
+    en: "Avg Δ temp",
+  },
+  "trade.charts.weather.total_precip": {
+    zh: "年降水总量",
+    fr: "Précip. totale",
+    en: "Total precip.",
+  },
+  "trade.charts.weather.total_frost": {
+    zh: "霜冻总日",
+    fr: "Jours de gel",
+    en: "Frost days",
   },
   "trade.charts.regional": {
     zh: "波尔多各产区风险对比",
@@ -150,6 +180,13 @@ export const DICT = {
   "result.drivers": { zh: "驱动因素", fr: "Facteurs", en: "Drivers" },
   "result.recommendations": { zh: "建议", fr: "Recommandations", en: "Recommendations" },
   "result.trace": { zh: "Agent 轨迹", fr: "Trace des agents", en: "Agent trace" },
+
+  // ── workflow ──────────────────────────────────────────────────────────
+  "workflow.title": { zh: "工作流", fr: "Flux de travail", en: "Workflow" },
+  "workflow.state.pending": { zh: "等待", fr: "En attente", en: "Pending" },
+  "workflow.state.running": { zh: "运行中", fr: "En cours", en: "Running" },
+  "workflow.state.ok": { zh: "完成", fr: "Terminé", en: "Done" },
+  "workflow.state.fail": { zh: "失败", fr: "Échec", en: "Failed" },
   "result.partial": {
     zh: "结果为降级输出（演示模式 / 缺少 key / sub-agent 失败）",
     fr: "Résultat partiel (mode démo / clé manquante / sous-agent en échec)",

@@ -22,13 +22,27 @@ export interface WeatherPoint {
 
 export function demoWeatherTimeseries(regionId: string): WeatherPoint[] {
   const seed = hashSeed(regionId);
-  const months = ["2025-11", "2025-12", "2026-01", "2026-02", "2026-03", "2026-04"];
-  return months.map((month, i) => ({
-    month,
-    tempAnomalyC: Number((Math.sin(i + seed * 6) * 1.5 + seed * 0.8).toFixed(2)),
-    precipMm: Math.round(60 + Math.cos(i * 0.7 + seed * 4) * 30 + seed * 20),
-    frostDays: Math.max(0, Math.round(i < 3 ? 2 + seed * 3 : seed * 1.5)),
-  }));
+  const now = new Date();
+  // Trailing 12 months ending with the current month.
+  const months: string[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+  return months.map((month, i) => {
+    const monthIdx = parseInt(month.slice(-2), 10) - 1; // 0-11
+    // seasonal: cooler winter, warmer summer (sine wave on month-of-year)
+    const seasonal = Math.sin(((monthIdx - 3) / 12) * Math.PI * 2);
+    const anomaly = Math.sin((i + seed * 6) * 0.55) * 1.2 + seed * 0.6;
+    const precipBase = 55 + Math.cos((i + seed * 4) * 0.5) * 28 + (1 - seed) * 12;
+    const frostPotential = Math.max(0, -seasonal) * (2 + seed * 3);
+    return {
+      month,
+      tempAnomalyC: Number(anomaly.toFixed(2)),
+      precipMm: Math.round(precipBase),
+      frostDays: Math.max(0, Math.round(frostPotential)),
+    };
+  });
 }
 
 export interface SentimentSlice {
