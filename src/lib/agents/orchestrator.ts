@@ -318,12 +318,6 @@ async function directDispatch(
     query: input.question,
   };
 
-  // Phase 1 — weather + geo (parallel, both bundled-data only, <50 ms).
-  const [weather, geo] = await Promise.all([
-    runAgentSafely(weatherAgent as AnyAgent, weatherInput, ctx),
-    runAgentSafely(geoAgent as AnyAgent, geoInput, ctx),
-  ]);
-
   const summary = (r: AgentResult): string => {
     if (r.summary) return r.summary;
     if (r.data) {
@@ -336,31 +330,20 @@ async function directDispatch(
     return r.error ?? "no data";
   };
 
-  // Phase 2 — cache-aware Tavily feed into extraction.
-  //
-  // Accuracy requirement: the extraction agent must see the Tavily signal so
-  // its driver weighting incorporates public-web evidence (critic chatter,
-  // market reaction, regulatory news). But we don't want every cold call to
-  // pay the full 6-10 s Tavily network round-trip serially before extraction
-  // can start — that pushes the wallclock past budget.
-  //
-  // Strategy: fire Tavily immediately, race it against a 3 s budget. If
-  // Tavily resolves in that window (the common case: SQLite cache hit or
-  // hydrated entry → <100 ms; pre-warmed search → 1-3 s), extraction starts
-  // WITH the Tavily signal. If Tavily is still going at 3 s (true cold
-  // network), extraction starts without it but Tavily keeps running in the
-  // background — we await it before pushing to the trace and feeding it to
-  // backtest. Net effect:
-  //   • cached / warm path: full accuracy, ~0 ms overhead vs. parallel
-  //   • cold path: same wallclock as before, mild accuracy degradation
-  //     (extraction misses Tavily); trace + backtest still see it
-  const TAVILY_BUDGET_MS = 3000;
-  const tavilyPromise = runAgentSafely(tavilyAgent as AnyAgent, tavilyInput, ctx);
-  const tavilyForExtraction = await Promise.race<AgentResult | null>([
-    tavilyPromise,
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), TAVILY_BUDGET_MS)),
+  // Phase 1 — weather + geo + Tavily in parallel. We always wait for
+  // ALL three before starting extraction. Accuracy is the contract:
+  // extraction must see the full three-signal evidence base (climate +
+  // terroir + public-web) on every call so its driver weighting is
+  // unbiased. The wallclock cost is whatever Tavily takes (cache hit
+  // ~100 ms; cold network 6-10 s) — weather and geo are bundled CSVs
+  // and resolve in <50 ms.
+  const [weather, geo, tavily] = await Promise.all([
+    runAgentSafely(weatherAgent as AnyAgent, weatherInput, ctx),
+    runAgentSafely(geoAgent as AnyAgent, geoInput, ctx),
+    runAgentSafely(tavilyAgent as AnyAgent, tavilyInput, ctx),
   ]);
 
+  // Phase 2 — extraction with all three signals.
   const extraction = await runAgentSafely(
     extractionAgent as AnyAgent,
     {
@@ -368,17 +351,11 @@ async function directDispatch(
       persona: input.persona,
       weatherSignal: summary(weather),
       geoSignal: summary(geo),
-      ...(tavilyForExtraction
-        ? { tavilySignal: summary(tavilyForExtraction) }
-        : {}),
+      tavilySignal: summary(tavily),
     },
     ctx,
   );
 
-  // Make sure we always have the Tavily result for trace + backtest, even
-  // if it raced past the extraction window. Tavily is concurrent with the
-  // extraction LLM call, so this await is almost always a no-op.
-  const tavily = tavilyForExtraction ?? (await tavilyPromise);
   trace.push(weather, geo, tavily, extraction);
 
   // Phase 3 — feature_agent reads from extraction's score / band / drivers.
