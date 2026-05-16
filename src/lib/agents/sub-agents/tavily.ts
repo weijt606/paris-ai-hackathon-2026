@@ -2,6 +2,11 @@ import "server-only";
 import { env, integrations, isDemoMode } from "@/lib/env";
 import type { AgentContext, SubAgent } from "@/lib/agents/types";
 import { findRegion } from "@/lib/wine/regions";
+import {
+  buildTavilyCacheKey,
+  readTavilyCache,
+  writeTavilyCache,
+} from "@/lib/agents/sub-agents/tavily-cache";
 
 export interface TavilyInput {
   // New harness input
@@ -9,13 +14,28 @@ export interface TavilyInput {
   startYear?: number;
   endYear?: number;
   maxResultsPerQuery?: number;
+  forceRefresh?: boolean;
   // Legacy fields (kept for compatibility with existing orchestrator prompts)
   regionId?: string;
   facets?: Array<"vineyard_official" | "news" | "forum" | "government" | "research">;
   query?: string;
 }
 
+type SchemaFeatureId = "market_expectation_sentiment" | "policy_trade_risk";
+type SchemaSignalCategory = "non_natural_market_signal" | "non_natural_policy_signal";
+
+export interface TavilySignalSource {
+  url: string;
+  domain: string;
+  title: string;
+}
+
 export interface TavilySignal {
+  featureId: SchemaFeatureId;
+  category: SchemaSignalCategory;
+  window: string;
+  signal: string;
+  sources: TavilySignalSource[];
   source: string;
   url?: string;
   snippet: string;
@@ -71,6 +91,9 @@ export interface TavilyHarnessReport {
   removedByQualityFilter: number;
   removedByUrlDedupe: number;
   errorCount: number;
+  cacheHits: number;
+  cacheMisses: number;
+  liveFetches: number;
   sourceTypeCounts: Record<TavilySourceType, number>;
   topDomains: Array<{ domain: string; count: number }>;
 }
@@ -138,7 +161,15 @@ const TRUSTED_DOMAINS: Record<string, number> = {
   "jancisrobinson.com": 0.8,
 };
 
-const BLOCKED_TERMS = ["hotel", "tourism", "booking", "tripadvisor", "airbnb", "restaurant"];
+const BLOCKED_TERMS = [
+  "hotel",
+  "tourism",
+  "booking",
+  "tripadvisor",
+  "airbnb",
+  "restaurant reservation",
+  "restaurant booking",
+];
 
 type NormalizedHarnessInput = {
   region: "Bordeaux";
@@ -151,6 +182,37 @@ type QuerySpec = {
   year: number;
   sourceType: TavilySourceType;
   query: string;
+};
+
+const SCHEMA_FEATURE_BY_SOURCE_TYPE: Record<
+  TavilySourceType,
+  { featureId: SchemaFeatureId; category: SchemaSignalCategory; window: string }
+> = {
+  bordeaux_sentiment: {
+    featureId: "market_expectation_sentiment",
+    category: "non_natural_market_signal",
+    window: "pre-release and en primeur period",
+  },
+  bordeaux_policy: {
+    featureId: "policy_trade_risk",
+    category: "non_natural_policy_signal",
+    window: "vintage release year",
+  },
+  bordeaux_regulation: {
+    featureId: "policy_trade_risk",
+    category: "non_natural_policy_signal",
+    window: "vintage release year",
+  },
+  bordeaux_winemaker: {
+    featureId: "market_expectation_sentiment",
+    category: "non_natural_market_signal",
+    window: "pre-release and en primeur period",
+  },
+  bordeaux_market: {
+    featureId: "market_expectation_sentiment",
+    category: "non_natural_market_signal",
+    window: "pre-release and en primeur period",
+  },
 };
 
 function currentYear(): number {
@@ -254,7 +316,7 @@ function normalizeInput(input: TavilyInput, ctx?: AgentContext): NormalizedHarne
   return { region: "Bordeaux", startYear, endYear, maxResultsPerQuery };
 }
 
-function buildQueries(input: NormalizedHarnessInput): QuerySpec[] {
+function buildQueries(input: NormalizedHarnessInput, refinement?: string): QuerySpec[] {
   const byType: Record<TavilySourceType, string[]> = {
     bordeaux_sentiment: [
       "Bordeaux wine sentiment opinion critic review consumer reaction avis millesime {year}",
@@ -285,7 +347,7 @@ function buildQueries(input: NormalizedHarnessInput): QuerySpec[] {
         specs.push({
           year: y,
           sourceType,
-          query: template.replace("{year}", String(y)),
+          query: [template.replace("{year}", String(y)), refinement?.trim()].filter(Boolean).join(" "),
         });
       });
     });
@@ -392,9 +454,29 @@ function compactText(text: string, maxLength = 320): string {
 
 async function runQueryPool(
   queries: QuerySpec[],
-  worker: (spec: QuerySpec) => Promise<{ rows: TavilyHarnessResult[]; errors: TavilyHarnessError[] }>,
-): Promise<Array<{ rows: TavilyHarnessResult[]; errors: TavilyHarnessError[] }>> {
-  const results: Array<{ rows: TavilyHarnessResult[]; errors: TavilyHarnessError[] }> = [];
+  worker: (spec: QuerySpec) => Promise<{
+    rows: TavilyHarnessResult[];
+    errors: TavilyHarnessError[];
+    cacheHits: number;
+    cacheMisses: number;
+    liveFetches: number;
+  }>,
+): Promise<
+  Array<{
+    rows: TavilyHarnessResult[];
+    errors: TavilyHarnessError[];
+    cacheHits: number;
+    cacheMisses: number;
+    liveFetches: number;
+  }>
+> {
+  const results: Array<{
+    rows: TavilyHarnessResult[];
+    errors: TavilyHarnessError[];
+    cacheHits: number;
+    cacheMisses: number;
+    liveFetches: number;
+  }> = [];
   for (let i = 0; i < queries.length; i += MAX_CONCURRENT_REQUESTS) {
     const batch = queries.slice(i, i + MAX_CONCURRENT_REQUESTS);
     results.push(...(await Promise.all(batch.map(worker))));
@@ -407,14 +489,38 @@ export async function runTavilyHarness(
   opts: { signal?: AbortSignal } = {},
 ): Promise<TavilyHarnessOutput> {
   const input = normalizeInput(rawInput);
-  const queries = buildQueries(input);
+  const queries = buildQueries(input, rawInput.query);
   const settled = await runQueryPool(
     queries,
     async (spec) => {
       const rowsForQuery: TavilyHarnessResult[] = [];
       const errorsForQuery: TavilyHarnessError[] = [];
+      let cacheHits = 0;
+      let cacheMisses = 0;
+      let liveFetches = 0;
       try {
-        const rows = await fetchTavily(spec.query, input.maxResultsPerQuery, opts.signal);
+        const cacheInput = {
+          region: input.region,
+          year: spec.year,
+          sourceType: spec.sourceType,
+          query: spec.query,
+          maxResultsPerQuery: input.maxResultsPerQuery,
+        };
+        const cacheKey = buildTavilyCacheKey(cacheInput);
+        let rows: TavilySearchResult[] | null = null;
+
+        if (!rawInput.forceRefresh) {
+          rows = await readTavilyCache(cacheKey);
+          if (rows) cacheHits++;
+          else cacheMisses++;
+        }
+
+        if (!rows) {
+          rows = await fetchTavily(spec.query, input.maxResultsPerQuery, opts.signal);
+          liveFetches++;
+          await writeTavilyCache(cacheKey, cacheInput, rows);
+        }
+
         for (const row of rows) {
           const url = row.url ?? "";
           const normalized = normalizeUrl(url);
@@ -451,12 +557,15 @@ export async function runTavilyHarness(
           error: err instanceof Error ? err.message : String(err),
         });
       }
-      return { rows: rowsForQuery, errors: errorsForQuery };
+      return { rows: rowsForQuery, errors: errorsForQuery, cacheHits, cacheMisses, liveFetches };
     },
   );
 
   const errors = settled.flatMap((item) => item.errors);
   const rawRows = settled.flatMap((item) => item.rows);
+  const cacheHits = settled.reduce((sum, item) => sum + item.cacheHits, 0);
+  const cacheMisses = settled.reduce((sum, item) => sum + item.cacheMisses, 0);
+  const liveFetches = settled.reduce((sum, item) => sum + item.liveFetches, 0);
 
   const afterQuality = rawRows.filter(qualityFilter);
 
@@ -493,6 +602,9 @@ export async function runTavilyHarness(
     removedByQualityFilter: rawRows.length - afterQuality.length,
     removedByUrlDedupe: afterQuality.length - results.length,
     errorCount: errors.length,
+    cacheHits,
+    cacheMisses,
+    liveFetches,
     sourceTypeCounts: toSourceTypeCounts(results),
     topDomains: topDomains(results),
   };
@@ -500,12 +612,31 @@ export async function runTavilyHarness(
   return { results, report, errors };
 }
 
+export function mapTavilyResultsToSchemaSignals(results: TavilyHarnessResult[]): TavilySignal[] {
+  return results.slice(0, 12).map((r) => {
+    const schemaFeature = SCHEMA_FEATURE_BY_SOURCE_TYPE[r.sourceType];
+    return {
+      featureId: schemaFeature.featureId,
+      category: schemaFeature.category,
+      window: schemaFeature.window,
+      signal: compactText(r.content || r.title),
+      sources: [{ url: r.url, domain: r.domain, title: r.title }],
+      source: r.sourceType,
+      url: r.url,
+      snippet: compactText(r.content || r.title),
+      confidence: r.finalScore,
+    };
+  });
+}
+
 function toAgentSignals(out: TavilyHarnessOutput): TavilySignal[] {
-  return out.results.slice(0, 12).map((r) => ({
-    source: r.sourceType,
-    url: r.url,
-    snippet: compactText(r.content || r.title),
-    confidence: r.finalScore,
+  return mapTavilyResultsToSchemaSignals(out.results);
+}
+
+function compactResultsForAgent(results: TavilyHarnessResult[]): TavilyHarnessResult[] {
+  return results.map((r) => ({
+    ...r,
+    content: compactText(r.content),
   }));
 }
 
@@ -524,6 +655,10 @@ export const tavilyAgent: SubAgent<TavilyInput, TavilySignals> = {
       startYear: { type: "integer", description: "Start year (>= 2000)." },
       endYear: { type: "integer", description: "End year (<= current year)." },
       maxResultsPerQuery: { type: "integer", description: "Optional, 1..10. Default 5." },
+      forceRefresh: {
+        type: "boolean",
+        description: "Skip the local SQLite cache and fetch fresh Tavily results.",
+      },
       regionId: { type: "string", description: "Legacy region id input, e.g. 'bordeaux-medoc'." },
       query: { type: "string", description: "Legacy optional refinement (unused by harness)." },
     },
@@ -562,6 +697,9 @@ export const tavilyAgent: SubAgent<TavilyInput, TavilySignals> = {
           removedByQualityFilter: 0,
           removedByUrlDedupe: 0,
           errorCount: 0,
+          cacheHits: 0,
+          cacheMisses: 0,
+          liveFetches: 0,
           sourceTypeCounts: {
             bordeaux_sentiment: 0,
             bordeaux_policy: 0,
@@ -582,6 +720,7 @@ export const tavilyAgent: SubAgent<TavilyInput, TavilySignals> = {
           signals: [],
           partial: true,
           report: out.report,
+          results: [],
         },
         summary: "demo fallback",
       };
@@ -607,6 +746,9 @@ export const tavilyAgent: SubAgent<TavilyInput, TavilySignals> = {
               removedByQualityFilter: 0,
               removedByUrlDedupe: 0,
               errorCount: 0,
+              cacheHits: 0,
+              cacheMisses: 0,
+              liveFetches: 0,
               sourceTypeCounts: {
                 bordeaux_sentiment: 0,
                 bordeaux_policy: 0,
@@ -616,6 +758,7 @@ export const tavilyAgent: SubAgent<TavilyInput, TavilySignals> = {
               },
               topDomains: [],
             },
+          results: [],
         },
         summary: "stub (no key)",
       };
@@ -634,7 +777,7 @@ export const tavilyAgent: SubAgent<TavilyInput, TavilySignals> = {
           partial: out.report.errorCount > 0 || signals.length === 0,
           report: out.report,
           errors: out.errors.slice(0, 5),
-          results: out.results,
+          results: compactResultsForAgent(out.results),
         },
         summary: `${out.report.afterUrlDedupe} deduped hits`,
       };
