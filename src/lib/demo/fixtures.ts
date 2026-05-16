@@ -1,12 +1,66 @@
 import "server-only";
 import type { AnalyzeInput, AnalyzeResult } from "@/lib/wine/types";
 import { bandOf } from "@/lib/wine/types";
+import type { GeoSignals } from "@/lib/agents/sub-agents/geo";
 
 /**
  * Demo fixtures — deterministic responses for NEXT_PUBLIC_DEMO_MODE=true.
  * Used for offline rehearsal and to save credits during dev. Every new
  * sponsor / sub-agent call should add a fixture branch here (H3).
  */
+
+export function demoGeoSignals(regionId: string, chateau?: string): GeoSignals {
+  if (chateau) {
+    return {
+      summary: `${chateau} (fixture) — ridge site (good cold-air drainage), moderate Gironde water-buffer.`,
+      centroid: { lat: 45.22, lng: -0.77 },
+      appellations: ["Pauillac"],
+      notes: [
+        "Elevation 14 m above sea level.",
+        "5.0 km from the Gironde estuary — moderate water-buffer.",
+        "TPI +5.8 m — ridge site (good cold-air drainage).",
+        "Slope 2.8%, N-facing — pronounced slope, cool-facing — slower ripening, preserves acidity in warm vintages.",
+        "Local relief 22 m (300 m neighborhood).",
+        "Soil: 34% clay / 33% sand / 32% silt — balanced loam.",
+      ],
+    };
+  }
+  if (regionId === "bordeaux-medoc") {
+    return {
+      summary:
+        "Médoc (fixture): 60 classed growths across 5 AOCs; 4 frost-pocket sites; mean elevation 15 m.",
+      centroid: { lat: 45.12, lng: -0.72 },
+      appellations: ["Pauillac", "Saint-Estèphe", "Saint-Julien", "Margaux", "Haut-Médoc"],
+      notes: [
+        "Elevation: 15 m mean (range 3–30 m). Classed growths cluster on gravel croupes 7–24 m above the estuary.",
+        "Distance to Gironde: 6.1 km mean (range 3.3–10.0 km). Closer sites get a stronger water-buffer on diurnal range.",
+        "Topographic Position Index: mean 2.2 m. 4 châteaux sit in cold-air pockets (TPI < −2 m) — elevated spring-frost risk.",
+        "Slope: mean 1.1% (max 2.8%). 49 sites with measurable slope, dominant aspect E, 16 sun-exposed (S/SE/SW), 16 cool-facing (N/NE/NW).",
+        "Soil texture: mean clay 27% / sand 45%. Gravel/sandy regime, strong drainage.",
+        "AOC mix: Margaux (21), Pauillac (18), Saint-Julien (11), Saint-Estèphe (5), Haut-Médoc (5).",
+        "Frost-pocket châteaux: Léoville-Las Cases, Léoville-Barton, Ducru-Beaucaillou, Calon-Ségur.",
+      ],
+    };
+  }
+  if (regionId === "bordeaux-graves") {
+    return {
+      summary: "Graves (fixture): 1 classed growth (Haut-Brion); inland Pessac-Léognan terroir.",
+      centroid: { lat: 44.81, lng: -0.61 },
+      appellations: ["Pessac-Léognan"],
+      notes: [
+        "Only Premier Cru outside the Médoc strip: Haut-Brion at 26 m elevation, 14 km inland.",
+        "TPI ~0 m — neutral topographic position with no frost-pocket signal.",
+        "Distance to Gironde: 13 km — weak water-buffer; relies on Atlantic moderation.",
+      ],
+    };
+  }
+  return {
+    summary: `${regionId} (fixture): no 1855-classed coverage in dataset`,
+    centroid: { lat: 47.0, lng: 4.9 },
+    appellations: [],
+    notes: ["Static centroid only. Per-château terroir profiles are limited to left-bank 1855 classed growths."],
+  };
+}
 
 export function demoWineAnalysis(input: AnalyzeInput): AnalyzeResult {
   const score = input.region.parent === "burgundy" ? 62 : 48;
