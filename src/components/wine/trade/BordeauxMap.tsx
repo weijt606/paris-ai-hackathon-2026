@@ -285,7 +285,7 @@ export function BordeauxMap({ selectedChateau, onChateauSelect }: Props) {
 
       <div className="mb-3">{searchBar}</div>
 
-      <div className="aspect-[5/4] w-full overflow-hidden rounded-md border bg-muted/30">
+      <div className="h-[420px] w-full overflow-hidden rounded-md border bg-muted/30 md:h-[520px]">
         {mapBody}
       </div>
 
