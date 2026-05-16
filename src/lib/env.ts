@@ -17,6 +17,11 @@ const serverSchema = z.object({
   SLNG_API_KEY: z.string().min(1).optional(),
   SLNG_BASE_URL: z.string().url().default("https://api.slng.ai"),
 
+  TAVILY_API_KEY: z.string().min(1).optional(),
+
+  PIONEER_API_KEY: z.string().min(1).optional(),
+  PIONEER_BASE_URL: z.string().url().default("https://api.pioneer.ai"),
+
   DATABASE_URL: z.string().min(1).default("file:./data/dev.db"),
 });
 
@@ -55,6 +60,11 @@ export const sponsors = {
   fal: Boolean(env.FAL_KEY),
   gradium: Boolean(env.GRADIUM_API_KEY),
   slng: Boolean(env.SLNG_API_KEY),
+} as const;
+
+export const integrations = {
+  tavily: Boolean(env.TAVILY_API_KEY),
+  pioneer: Boolean(env.PIONEER_API_KEY),
 } as const;
 
 export const isDemoMode = env.NEXT_PUBLIC_DEMO_MODE;
