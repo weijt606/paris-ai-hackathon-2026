@@ -3,7 +3,9 @@
 Multi-agent risk + market intelligence for French wine regions (Burgundy & Bordeaux). Built for the Paris AI Hackathon 2026.
 
 **Sponsors:** OpenAI · Tavily · Pioneer.ai
-**Architecture:** Input → OpenAI orchestrator (tool-use loop) → three parallel **real** sub-agents (weather: ERA5+SEAS5 climate · geo: 61-château 1855 terroir · tavily: 5-channel Bordeaux harness, SQLite-cached) → schema-grounded extraction (OpenAI + 1150-line wine-vintage-quality-schema, 28 features × 6 hard gates × 11 dynamic adjustments) → feature agent (Pioneer-hosted wine LLM with OpenAI fallback) → dashboard + report + email digest. Orchestrator-level result cache (30 min TTL) makes repeat requests near-instant.
+**Architecture:** Input → orchestrator (fixed-order **direct-dispatch** by default; OpenAI tool-use loop available behind a flag) → three parallel **real** sub-agents (weather: ERA5 1990-2024 + NASA POWER 2025 + SEAS5 2026 · geo: 61-château 1855 terroir · tavily: 5-channel Bordeaux harness, SQLite-cached + JSON-export pre-hydration) → schema-grounded extraction (OpenAI + 1150-line wine-vintage-quality-schema, 28 features × 6 hard gates × 11 dynamic adjustments) → feature agent (Pioneer-hosted wine LLM with OpenAI fallback) → optional backtest agent for historical vintages → Atlas UI (3-col shell with workflow hero + analysis drawer + completion gate). Orchestrator-level result cache (30 min TTL) makes repeat requests near-instant.
+
+**Pipeline timing (cold, demo-fast default):** forward 2026 ~22-30 s · backtest 2020 ~17-25 s. Set `NEXT_PUBLIC_DEMO_FAST=false` to fall back to the legacy GPT-routing path (~80 s).
 
 ## Quick start
 
@@ -19,6 +21,13 @@ Demo-mode end-to-end (no keys needed):
 ```bash
 NEXT_PUBLIC_DEMO_MODE=true pnpm dev
 # → orchestrator returns fixtures from src/lib/demo/fixtures.ts
+```
+
+Legacy GPT-routing path (slow, useful for debugging the tool-use loop):
+
+```bash
+NEXT_PUBLIC_DEMO_FAST=false pnpm dev
+# → orchestrator uses the OpenAI tool-use loop end-to-end (~80 s/call)
 ```
 
 ## Architecture — end-to-end
@@ -153,19 +162,33 @@ The system is a pipeline of OpenAI-driven agents wired by a single tool-use loop
                                      │
                                      ▼
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│ 7. UI CONSUMPTION                                                               │
-│    Dashboard (vineyard | trade) renders, in order:                              │
-│      • ExecutiveSummary card     ← feature.executiveSummary                     │
-│      • RiskCard (animated score) ← riskScore + riskBand                         │
-│      • DriverDonutChart          ← drivers[] (consulting-style callouts)        │
-│      • WeatherLineChart          ← demoWeatherTimeseries (12-month composed)    │
-│      • RegionalRiskChart         ← BORDEAUX_BENCHMARKS (trade only)             │
-│      • SentimentDonut            ← demoSentiment (trade only)                   │
-│      • WorkflowTrace SVG         ← live state machine, sidebar                  │
-│      • ExportButton              ← window.print() + .md download from           │
-│                                    feature.reportMarkdown                       │
-│      • SubscribeDialog           ← POST /api/subscribe, with                    │
-│                                    feature.emailDigest as preview               │
+│ 7. UI CONSUMPTION  —  Atlas 3-col shell (`AtlasShell`)                          │
+│                                                                                 │
+│  ┌──────────────────┬──────────────────────────────┬─────────────────────────┐  │
+│  │ left: list/sidebar│ centre: BordeauxMap          │ right: detail panel     │  │
+│  │ ChateauList /     │ 61 1855 classés × dark/light │ Chateau detail /        │  │
+│  │ Vineyard regions  │ tiles · click → flyTo        │ Vineyard controls       │  │
+│  └──────────────────┴──────────────────────────────┴─────────────────────────┘  │
+│           ▲                          ▲                         ▲                │
+│   selection ──────────► state lifted to dashboard ◄──── Run / Show last          │
+│                                                                                 │
+│   During Run:  drawer overlays centre — WorkflowHero                            │
+│      headline rotates per active agent · elapsed / progress / active KV         │
+│      DAG (WorkflowTrace) · live event ticker                                    │
+│                                                                                 │
+│   On result: hero enters completion gate (timer freezes, emerald dot,           │
+│      "View report →" button)                                                    │
+│                                                                                 │
+│   View report click → drawer swaps to AnalysisDrawer with:                      │
+│      • ExecutiveSummary           ← feature.executiveSummary                    │
+│      • BacktestCard               ← when timeframe in past                      │
+│      • RiskCard + RiskBandLegend  ← score + band + gradient ref strip           │
+│      • TerroirCard                ← geoSnapshot                                 │
+│      • DriverDonutChart           ← drivers[]                                   │
+│      • WeatherLineChart           ← demoWeatherTimeseries                       │
+│      • RegionalRisk + Sentiment   ← trade only                                  │
+│      • FullReportCard             ← feature.reportMarkdown rendered inline      │
+│      • ExportButton, SubscribeDialog (drawer header)                            │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -280,14 +303,54 @@ Read [`docs/AGENTS.md`](docs/AGENTS.md) first — it lays out the file map, the 
 
 ## UI
 
-- **Two entry routes**: `/vineyard` (with file upload) and `/trade`. Both now mount the **interactive Leaflet Bordeaux map** in the sidebar.
+The `Atlas` shell is a 3-column composition (`AtlasShell` in
+`src/components/wine/atlas/`) shared by both personas. Map sits centre,
+context lists left, controls right, results overlay as a glass drawer.
+
+- **Two entry routes**: `/vineyard` and `/trade`. Both use `AtlasShell`:
+  - **Trade** — left: `ChateauListSidebar` (search + cru filter + 61
+    1855 classés). Centre: `BordeauxMap`. Right: `ChateauDetailPanel`
+    (terroir snapshot + `TradePersonaTabs` for merchant/restaurant/
+    wineshop + timeframe + Run).
+  - **Vineyard** — left: `VineyardSidebar` (region list, Burgundy +
+    Bordeaux). Centre: `BordeauxMap`. Right: `VineyardControls`
+    (timeframe + `UploadArea` + question + Run).
+- **Drawer pipeline**: when the user clicks Run, `AnalysisDrawer`
+  overlays the map column with the result stack. While agents are
+  running it shows `WorkflowHero` — cinematic during-run stage with a
+  serif headline that switches per active agent, an `elapsed / progress
+  / active` KV grid, the agent DAG, and a live event ticker. When the
+  result lands, `WorkflowHero` enters a **completion gate**: timer
+  freezes, progress pegs to 100%, the dot turns emerald, and a primary
+  **View report →** button reveals the full `AnalysisDrawer` stack. The
+  drawer does NOT auto-show — the user clicks through. Escape or the
+  panel's close button dismisses; `Show last analysis` chip in the
+  right panel reopens it.
+- **Map**: react-leaflet over CARTO dark / light tiles (theme-aware).
+  61 1855-classed château markers coloured by `growth_num`. Selection
+  from sidebar OR map click both fire the same fly-to (one memoised
+  target wins over query-single-match).
+- **Risk band reference**: `RiskBandLegend` inside `RiskCard` shows the
+  full 0-100 gradient (emerald → amber → orange → red) with a triangle
+  marker pinned at the score + a 4-column legend with score range and a
+  one-line buyer recommendation per band. Active band ringed and bolded.
+- **Full report**: `FullReportCard` renders `feature_agent`'s structured
+  markdown report inline — TL;DR, Key metrics table, ranked drivers,
+  action-verb recommendations, caveats — using a tiny in-house markdown
+  renderer (no react-markdown dep).
+- **Theme**: `ThemeToggle` in the top nav flips `.dark` on `<html>`.
+  An inline boot script (`beforeInteractive`) reads `localStorage` →
+  falls back to `prefers-color-scheme` → defaults to dark, so the
+  first paint matches the user's choice with no flash.
 - **Bilingual**: EN (default) / FR toggle in top nav, in-memory.
-- **Charts**: Recharts — consulting-style drivers donut · weather composed line/area/bar · regional risk · market sentiment.
-- **Map**: react-leaflet over CARTO online tiles. 61 1855-classed château markers coloured by `growth_num`, click-to-focus. **Search input** filters by château / AOC / commune / cru (live count + auto fly-to single match). **Fullscreen toggle** for picking on a viewport-sized canvas.
-- **Workflow visualisation**: n8n-style SVG pipeline in the sidebar — live state per agent during analysis. Step details rendered two-line so long summaries + 5-digit durations don't collide.
-- **Terroir card**: structured geo_agent output (elevation, soil, Gironde distance, frost-pocket signals, AOC mix) rendered above the driver donut on both dashboards.
-- **Export**: `window.print()` for PDF + direct `.md` report download (when feature_agent ran).
-- **Subscribe**: email form → `/api/subscribe`, with feature_agent's email digest shown inline as a preview.
+- **Charts**: Recharts — drivers donut · weather composed line/area/bar
+  · regional risk · market sentiment.
+- **Terroir card**: structured `geo_agent` output (elevation, soil,
+  Gironde distance, frost-pocket signals, AOC mix).
+- **Export**: `window.print()` for PDF + direct `.md` download (when
+  `feature_agent` ran).
+- **Subscribe**: email form → `/api/subscribe`, with the email digest
+  shown inline as a preview.
 
 ## Conventions
 

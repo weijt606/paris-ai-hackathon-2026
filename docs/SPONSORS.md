@@ -224,7 +224,8 @@ demo.** Here is what happens when each goes down:
 | `PIONEER_API_KEY` missing | feature_agent skips tier 1, goes straight to OpenAI tier 2 | invisible — feature still ships |
 | Pioneer down / timeout | feature_agent tier 1 returns null in ≤15 s, then tier 2 takes over | invisible at the product layer; visible in `trace[].notes` |
 | `NEXT_PUBLIC_DEMO_MODE=true` | entire pipeline short-circuits to `demoWineAnalysis()` | the dashboard's data-source pill shows "DEMO" |
-| `NEXT_PUBLIC_DEMO_FAST=true` | live LLM/Tavily still hit, but on a tight budget: Tavily cache pre-hydrated from `data/tavily-cache-export.json`, feature_agent skips Pioneer and goes straight to OpenAI tier 2, Tavily `max_results_per_query` capped at 3 | invisible at the product layer; visible in `trace[]` durations (typically <30 s total) |
+| `NEXT_PUBLIC_DEMO_FAST=true` **(default)** | orchestrator uses `directDispatch()` (fixed-order parallel pipeline, no GPT routing), Tavily cache pre-hydrated from `data/tavily-cache-export.json`, feature_agent skips Pioneer and goes straight to OpenAI tier 2, Tavily `max_results_per_query` capped at 3, OpenAI model pinned to `gpt-4o-mini` for all agent LLM calls | invisible at the product layer; visible in `trace[]` durations (typical cold call: forward 22-30 s · backtest 17-25 s) |
+| `NEXT_PUBLIC_DEMO_FAST=false` | orchestrator uses the legacy OpenAI Chat Completions tool-use loop — the LLM decides what to call when | typical cold call ~80 s; useful for experimenting with adaptive routing |
 
 This is the H2/H3 contract in `CLAUDE.md` made concrete — every adapter is
 gated, every failure is observable in `trace[]`, demo mode is the rehearsal
@@ -232,22 +233,37 @@ fallback.
 
 ---
 
-## 6. Cost / latency profile (warm, gpt-4o-mini, Pioneer Qwen-7B)
+## 6. Cost / latency profile (gpt-4o-mini)
 
-Per `/api/analyze` call, ballpark:
+Per `/api/analyze` call, ballpark — depends on which orchestrator
+path is selected by `NEXT_PUBLIC_DEMO_FAST`:
 
-| Phase | Time | Tokens (OpenAI) | Pioneer calls |
+### Demo-fast (default — directDispatch)
+
+| Phase | Wallclock | Tokens (OpenAI) | Pioneer calls |
 |---|---|---|---|
 | Cache hit (orchestrator) | <50 ms | 0 | 0 |
-| Cold: sub-agents (parallel) | 4-10 s | 0 | 0 |
-| Cold: extraction | 3-6 s | ~3 k in / ~1.5 k out | 0 |
-| Cold: feature (tier 1) | 6-10 s | 0 | 1 (~2 k in / ~1 k out) |
-| Cold: backtest (if vintage) | 4-8 s | ~2 k in / ~0.8 k out | 0 |
-| **Total cold call** | **15-30 s** | **~5-6 k in / ~2.5 k out** | **1** |
-| **Total warm call** | **<50 ms** | 0 | 0 |
+| Cold phase 1: weather + geo (parallel, bundled CSV) | <100 ms | 0 | 0 |
+| Cold phase 2: tavily + extraction (parallel) | ~18-20 s | ~3 k in / ~1.5 k out | 0 |
+| Cold phase 3: feature + backtest (parallel) | ~10 s | ~3-4 k in / ~1.5 k out | 0 |
+| **Cold forward call (no backtest)** | **~22-30 s** | **~3 k in / ~1.5 k out** | **0** |
+| **Cold backtest call** | **~17-25 s** | **~5-6 k in / ~2.5 k out** | **0** |
+| **Warm call (cache hit)** | **<50 ms** | 0 | 0 |
 
-At list prices this is roughly $0.002-0.004 per cold analyze call — cheap
-enough that a hackathon's worth of demo traffic costs less than a coffee.
+Backtest is often *faster* than the forward path because backtest_agent
+runs in parallel with feature_agent — the two ~10 s LLM calls overlap
+instead of stacking.
+
+### Legacy GPT-routing path (`DEMO_FAST=false`)
+
+The OpenAI tool-use loop adds 5-7 GPT roundtrips on top of the agent
+work (one round per tool-call decision), each taking 3-8 s on
+gpt-4o-mini. Typical cold call: **~80 s**. Same per-token cost, just
+much more wallclock.
+
+At list prices the demo-fast path is roughly $0.002-0.004 per cold
+analyze call — cheap enough that a hackathon's worth of demo traffic
+costs less than a coffee.
 
 ---
 
