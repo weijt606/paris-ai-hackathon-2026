@@ -8,18 +8,14 @@ export function EntryChoice() {
   return (
     <main className="container mx-auto max-w-5xl px-6 py-24 md:py-32">
       <header className="mb-20 text-center">
-        <p className="text-[10px] uppercase tracking-luxe text-muted-foreground">
-          {t("common.app_name")}
-        </p>
-        <h1 className="mt-8 max-w-3xl mx-auto text-balance font-serif text-5xl font-medium leading-[1.1] tracking-tight md:text-6xl">
+        <p className="kicker">{t("common.app_name")}</p>
+        <h1 className="mx-auto mt-8 max-w-3xl text-balance font-serif text-5xl font-medium leading-[1.1] tracking-tight md:text-6xl">
           {t("landing.tagline")}
         </h1>
-        <p className="mt-10 text-[10px] uppercase tracking-luxe text-muted-foreground">
-          — {t("landing.choose_entry")} —
-        </p>
+        <p className="kicker mt-10">— {t("landing.choose_entry")} —</p>
       </header>
 
-      <div className="grid gap-px overflow-hidden rounded-md border md:grid-cols-2">
+      <div className="grid gap-px overflow-hidden rounded-card border border-line bg-line md:grid-cols-2">
         <EntryCard
           href="/vineyard"
           index="01"
@@ -55,18 +51,16 @@ function EntryCard({
   return (
     <Link
       href={href}
-      className="group relative flex min-h-[320px] flex-col justify-between bg-card p-10 transition-colors hover:bg-muted/40 md:p-14"
+      className="group relative flex min-h-[340px] flex-col justify-between bg-panel-strong p-10 transition-colors hover:bg-surface-3 md:p-14"
     >
-      <span className="font-mono text-[10px] tracking-widest text-muted-foreground">
-        {index}
-      </span>
+      <span className="kicker tabular">{index}</span>
       <div className="space-y-4">
         <h2 className="font-serif text-5xl font-medium leading-none tracking-tight md:text-6xl">
           {title}
         </h2>
         <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">{subtitle}</p>
       </div>
-      <span className="inline-flex items-center gap-3 text-[10px] uppercase tracking-luxe text-foreground">
+      <span className="inline-flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.22em] text-foreground">
         {cta}
         <span aria-hidden className="h-px w-8 bg-foreground transition-all group-hover:w-14" />
       </span>

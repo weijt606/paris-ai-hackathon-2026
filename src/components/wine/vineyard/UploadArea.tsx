@@ -36,8 +36,8 @@ export function UploadArea({ uploads, onChange }: Props) {
   }
 
   return (
-    <div className="rounded-xl border p-4">
-      <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+    <div className="rounded-card border border-line p-4">
+      <h3 className="kicker">
         {t("vineyard.upload.title")}
       </h3>
       <div
@@ -54,10 +54,10 @@ export function UploadArea({ uploads, onChange }: Props) {
         }}
         className={cn(
           "mt-3 cursor-pointer rounded-lg border-2 border-dashed p-6 text-center text-sm transition",
-          dragging ? "border-foreground bg-muted/50" : "border-muted hover:bg-muted/30",
+          dragging ? "border-foreground bg-surface-2" : "border-line hover:bg-surface-1",
         )}
       >
-        <p className="text-muted-foreground">{t("vineyard.upload.hint")}</p>
+        <p className="text-soft">{t("vineyard.upload.hint")}</p>
         <input
           ref={inputRef}
           type="file"
@@ -71,23 +71,23 @@ export function UploadArea({ uploads, onChange }: Props) {
         />
       </div>
       {uploads.length === 0 ? (
-        <p className="mt-3 text-xs text-muted-foreground">{t("vineyard.upload.empty")}</p>
+        <p className="mt-3 text-xs text-soft">{t("vineyard.upload.empty")}</p>
       ) : (
         <>
           <ul className="mt-3 space-y-1">
             {uploads.map((u, i) => (
               <li
                 key={`${u.name}-${i}`}
-                className="flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-xs"
+                className="flex items-center gap-2 rounded-md border border-line bg-surface-1 px-3 py-2 text-xs"
               >
                 <span className="flex-1 truncate">{u.name}</span>
-                <span className="font-mono text-muted-foreground">
+                <span className="tabular font-mono text-soft">
                   {(u.size / 1024).toFixed(1)} KB
                 </span>
                 <button
                   type="button"
                   onClick={() => remove(i)}
-                  className="ml-1 text-muted-foreground hover:text-destructive"
+                  className="ml-1 text-soft hover:text-red-400"
                   aria-label={t("vineyard.upload.remove")}
                 >
                   ×
@@ -95,7 +95,7 @@ export function UploadArea({ uploads, onChange }: Props) {
               </li>
             ))}
           </ul>
-          <p className="mt-2 rounded-md bg-emerald-500/10 px-2 py-1 text-xs text-emerald-700 dark:text-emerald-300">
+          <p className="mt-2 rounded-md bg-emerald-500/15 px-2 py-1 text-xs text-emerald-300">
             ✓ {t("vineyard.upload.context_badge", { n: uploads.length })}
           </p>
         </>

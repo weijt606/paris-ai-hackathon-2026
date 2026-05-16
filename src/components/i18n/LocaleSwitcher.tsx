@@ -7,17 +7,17 @@ import { cn } from "@/lib/utils";
 export function LocaleSwitcher() {
   const { locale, setLocale } = useI18n();
   return (
-    <div className="inline-flex rounded-md border bg-background p-0.5 text-xs">
+    <div className="inline-flex rounded-pill border border-line bg-surface-1 p-1 text-[10px]">
       {LOCALES.map((l) => (
         <button
           key={l.code}
           type="button"
           onClick={() => setLocale(l.code)}
           className={cn(
-            "rounded-sm px-2 py-1 transition",
+            "rounded-pill px-2.5 py-1 font-bold uppercase tracking-[0.18em] transition-colors",
             locale === l.code
               ? "bg-foreground text-background"
-              : "text-muted-foreground hover:bg-muted",
+              : "text-soft hover:text-foreground",
           )}
         >
           {l.short}

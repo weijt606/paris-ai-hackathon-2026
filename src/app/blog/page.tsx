@@ -117,13 +117,13 @@ export default function BlogPage() {
   return (
     <main className="container mx-auto max-w-3xl px-6 py-16">
       <header className="mb-12">
-        <p className="text-[10px] uppercase tracking-luxe text-muted-foreground">
+        <p className="kicker">
           Wine Signals · Engineering blog
         </p>
         <h1 className="mt-3 font-serif text-4xl font-medium leading-tight tracking-tight md:text-5xl">
           How Wine Signals works
         </h1>
-        <p className="mt-4 max-w-prose text-sm leading-relaxed text-muted-foreground">
+        <p className="mt-4 max-w-prose text-sm leading-relaxed text-soft">
           A multi-agent pipeline that turns climate, terroir, and market signals into a
           vintage-quality forecast for Burgundy &amp; Bordeaux. This page walks through the
           architecture and answers the questions we get most often.
@@ -136,21 +136,21 @@ export default function BlogPage() {
           {STAGES.map((s) => (
             <li
               key={s.index}
-              className="grid gap-3 rounded-md border bg-card p-5 md:grid-cols-[32px_1fr]"
+              className="card-lg grid gap-3 p-5 md:grid-cols-[32px_1fr]"
             >
-              <span className="font-mono text-sm tabular-nums text-muted-foreground">
+              <span className="tabular font-mono text-sm text-soft">
                 {s.index}
               </span>
               <div className="min-w-0">
                 <p className="font-medium">{s.title}</p>
-                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
-                <p className="mt-2 font-mono text-[10px] text-muted-foreground">{s.source}</p>
+                <p className="mt-1 text-sm leading-relaxed text-soft">{s.body}</p>
+                <p className="kicker mt-2 font-mono">{s.source}</p>
               </div>
             </li>
           ))}
         </ol>
 
-        <pre className="mt-8 overflow-x-auto rounded-md border bg-card p-5 text-[10px] leading-relaxed text-muted-foreground">
+        <pre className="mt-8 overflow-x-auto card-lg p-5 text-[10px] leading-relaxed text-soft">
 {`POST /api/analyze
         │
         ▼
@@ -187,22 +187,22 @@ export default function BlogPage() {
           {FAQ.map((qa, i) => (
             <details
               key={i}
-              className="group rounded-md border bg-card p-5 open:bg-muted/30"
+              className="group card-lg p-5 open:bg-surface-2"
             >
               <summary className="cursor-pointer list-none font-medium text-foreground">
-                <span className="mr-3 font-mono text-xs tabular-nums text-muted-foreground">
+                <span className="tabular mr-3 font-mono text-xs text-soft">
                   {String(i + 1).padStart(2, "0")}
                 </span>
                 {qa.q}
               </summary>
-              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{qa.a}</p>
+              <p className="mt-3 text-sm leading-relaxed text-soft">{qa.a}</p>
             </details>
           ))}
         </div>
       </section>
 
-      <nav className="border-t pt-8 text-[11px] uppercase tracking-luxe">
-        <ul className="flex flex-wrap gap-6 text-muted-foreground">
+      <nav className="border-t border-line pt-8">
+        <ul className="kicker flex flex-wrap gap-6">
           <li>
             <Link href="/" className="hover:text-foreground">
               Home

@@ -45,8 +45,8 @@ export function WeatherLineChart({ regionId }: { regionId: string }) {
   const totalFrost = sum(data.map((d) => d.frostDays));
 
   return (
-    <figure className="rounded-md border bg-card p-6">
-      <figcaption className="mb-4 text-[10px] uppercase tracking-luxe text-muted-foreground">
+    <figure className="card-lg p-6">
+      <figcaption className="kicker mb-4">
         {t("trade.charts.weather")}
       </figcaption>
 
@@ -59,11 +59,11 @@ export function WeatherLineChart({ regionId }: { regionId: string }) {
             </linearGradient>
           </defs>
 
-          <CartesianGrid strokeDasharray="2 4" stroke="hsl(var(--border))" vertical={false} />
+          <CartesianGrid strokeDasharray="2 4" stroke="var(--line)" vertical={false} />
 
           <XAxis
             dataKey="month"
-            stroke="hsl(var(--muted-foreground))"
+            stroke="hsl(var(--soft))"
             fontSize={10}
             tickLine={false}
             axisLine={false}
@@ -73,7 +73,7 @@ export function WeatherLineChart({ regionId }: { regionId: string }) {
           <YAxis
             yAxisId="temp"
             orientation="left"
-            stroke="hsl(var(--muted-foreground))"
+            stroke="hsl(var(--soft))"
             fontSize={10}
             tickLine={false}
             axisLine={false}
@@ -83,7 +83,7 @@ export function WeatherLineChart({ regionId }: { regionId: string }) {
           <YAxis
             yAxisId="precip"
             orientation="right"
-            stroke="hsl(var(--muted-foreground))"
+            stroke="hsl(var(--soft))"
             fontSize={10}
             tickLine={false}
             axisLine={false}
@@ -93,16 +93,16 @@ export function WeatherLineChart({ regionId }: { regionId: string }) {
           <ReferenceLine
             yAxisId="temp"
             y={0}
-            stroke="hsl(var(--muted-foreground))"
+            stroke="hsl(var(--soft))"
             strokeDasharray="3 3"
             strokeOpacity={0.5}
           />
 
           <Tooltip
-            cursor={{ stroke: "hsl(var(--border))", strokeWidth: 1 }}
+            cursor={{ stroke: "var(--line)", strokeWidth: 1 }}
             contentStyle={{
-              background: "hsl(var(--background))",
-              border: "1px solid hsl(var(--border))",
+              background: "var(--panel)",
+              border: "1px solid var(--line)",
               borderRadius: 6,
               fontSize: 12,
               padding: "8px 12px",
@@ -180,7 +180,7 @@ export function WeatherLineChart({ regionId }: { regionId: string }) {
       </ResponsiveContainer>
 
       {/* Footer KPIs — telemetry-feel summary of the 12-month window. */}
-      <div className="mt-4 grid grid-cols-3 gap-4 border-t pt-4">
+      <div className="mt-4 grid grid-cols-3 gap-4 border-t border-line pt-4">
         <KpiCell
           label={t("trade.charts.weather.avg_temp")}
           value={`${avgTemp >= 0 ? "+" : ""}${avgTemp.toFixed(1)}°C`}
@@ -204,11 +204,11 @@ export function WeatherLineChart({ regionId }: { regionId: string }) {
 function KpiCell({ label, value, accent }: { label: string; value: string; accent: string }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="flex items-center gap-1.5 text-[9px] uppercase tracking-luxe text-muted-foreground">
+      <span className="kicker flex items-center gap-1.5">
         <span className="inline-block h-1 w-3 rounded-full" style={{ background: accent }} />
         {label}
       </span>
-      <span className="font-mono text-sm tabular-nums">{value}</span>
+      <span className="tabular font-mono text-sm">{value}</span>
     </div>
   );
 }

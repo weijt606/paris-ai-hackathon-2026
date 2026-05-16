@@ -18,13 +18,13 @@ export function TerroirCard({ snapshot }: Props) {
   if (!snapshot || snapshot.notes.length === 0) return null;
 
   return (
-    <article className="rounded-md border bg-card p-6">
+    <article className="card-lg p-6">
       <header className="flex items-baseline justify-between gap-3">
-        <p className="text-[10px] uppercase tracking-luxe text-muted-foreground">
+        <p className="kicker">
           {t("terroir.title")}
         </p>
         {snapshot.appellations.length > 0 && (
-          <p className="font-mono text-[10px] tabular-nums text-muted-foreground">
+          <p className="tabular font-mono text-[10px] text-soft">
             {snapshot.appellations.length} aoc · {snapshot.notes.length} signals
           </p>
         )}
@@ -36,7 +36,7 @@ export function TerroirCard({ snapshot }: Props) {
         {snapshot.notes.map((note, i) => (
           <li
             key={i}
-            className="flex items-start gap-3 text-sm leading-relaxed text-muted-foreground"
+            className="flex items-start gap-3 text-sm leading-relaxed text-soft"
           >
             <span
               aria-hidden
@@ -48,11 +48,11 @@ export function TerroirCard({ snapshot }: Props) {
       </ul>
 
       {snapshot.appellations.length > 0 && (
-        <div className="mt-5 flex flex-wrap gap-1.5 border-t pt-4">
+        <div className="mt-5 flex flex-wrap gap-1.5 border-t border-line pt-4">
           {snapshot.appellations.map((aoc) => (
             <span
               key={aoc}
-              className="rounded-full border bg-background px-2.5 py-0.5 text-[10px] uppercase tracking-luxe text-muted-foreground"
+              className="chip"
             >
               {aoc}
             </span>

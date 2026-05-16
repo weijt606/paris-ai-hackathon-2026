@@ -9,9 +9,11 @@ interface Props {
 }
 
 const VERDICT_STYLE: Record<BacktestSnapshot["verdict"], string> = {
-  high_agreement: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
-  moderate_agreement: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30",
-  divergent: "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30",
+  high_agreement:
+    "border-emerald-500/40 text-emerald-200 bg-emerald-500/10",
+  moderate_agreement:
+    "border-amber-500/40 text-amber-200 bg-amber-500/10",
+  divergent: "border-red-500/40 text-red-200 bg-red-500/10",
 };
 
 const VERDICT_KEY: Record<BacktestSnapshot["verdict"], `backtest.verdict.${BacktestSnapshot["verdict"]}`> = {
@@ -28,19 +30,15 @@ const VERDICT_KEY: Record<BacktestSnapshot["verdict"], `backtest.verdict.${Backt
 export function BacktestCard({ backtest }: Props) {
   const t = useT();
   return (
-    <article className="rounded-md border bg-card p-6">
-      <header className="flex flex-wrap items-baseline justify-between gap-3 border-b pb-3">
+    <article className="card-lg p-7">
+      <header className="flex flex-wrap items-baseline justify-between gap-3 border-b border-line pb-4">
         <div>
-          <p className="text-[10px] uppercase tracking-luxe text-muted-foreground">
-            {t("backtest.title")}
-          </p>
-          <p className="mt-1 font-mono text-[11px] tabular-nums text-muted-foreground">
-            vintage {backtest.year}
-          </p>
+          <p className="kicker">{t("backtest.title")}</p>
+          <p className="kicker-strong mt-2 tabular">vintage {backtest.year}</p>
         </div>
         <span
           className={cn(
-            "rounded-full border px-3 py-1 text-[10px] uppercase tracking-luxe",
+            "inline-flex items-center gap-1.5 rounded-pill border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em]",
             VERDICT_STYLE[backtest.verdict],
           )}
         >
@@ -50,37 +48,31 @@ export function BacktestCard({ backtest }: Props) {
 
       <div className="mt-6 grid gap-6 md:grid-cols-2">
         {/* Predicted */}
-        <div className="rounded-sm border bg-muted/30 p-5">
-          <p className="text-[10px] uppercase tracking-luxe text-muted-foreground">
-            {t("backtest.predicted")}
-          </p>
-          <p className="mt-3 font-serif text-5xl font-medium tabular-nums">
+        <div className="rounded-md border border-line bg-surface-2 p-5">
+          <p className="kicker">{t("backtest.predicted")}</p>
+          <p className="mt-3 font-serif text-5xl font-medium tabular">
             {backtest.predictedScore}
           </p>
           {backtest.predictedBand && (
-            <p className="mt-1 text-xs uppercase tracking-wide text-muted-foreground">
-              {backtest.predictedBand}
-            </p>
+            <p className="kicker mt-2">{backtest.predictedBand}</p>
           )}
         </div>
 
         {/* Actual — critics list */}
-        <div className="rounded-sm border bg-muted/30 p-5">
-          <p className="text-[10px] uppercase tracking-luxe text-muted-foreground">
-            {t("backtest.actual")}
-          </p>
+        <div className="rounded-md border border-line bg-surface-2 p-5">
+          <p className="kicker">{t("backtest.actual")}</p>
           {backtest.critics.length === 0 ? (
-            <p className="mt-3 text-sm italic text-muted-foreground">
+            <p className="mt-3 text-sm italic text-soft">
               {t("backtest.no_critics")}
             </p>
           ) : (
             <ul className="mt-3 space-y-2.5">
               {backtest.critics.slice(0, 4).map((c, i) => (
                 <li key={i} className="flex items-baseline gap-3 text-sm">
-                  <span className="min-w-[80px] shrink-0 text-[10px] uppercase tracking-luxe text-muted-foreground">
+                  <span className="min-w-[88px] shrink-0 text-[10px] font-bold uppercase tracking-[0.18em] text-soft">
                     {c.source}
                   </span>
-                  <span className="font-mono text-xs tabular-nums">
+                  <span className="font-mono text-xs tabular">
                     {c.score !== undefined ? `${c.score}` : ""}
                     {c.scale ? ` ${c.scale}` : ""}
                   </span>
@@ -98,11 +90,11 @@ export function BacktestCard({ backtest }: Props) {
 
       {/* Quotes */}
       {backtest.critics.some((c) => c.quote) && (
-        <ul className="mt-5 space-y-3 border-t pt-5">
+        <ul className="mt-5 space-y-3 border-t border-line pt-5">
           {backtest.critics.map((c, i) =>
             c.quote ? (
               <li key={i} className="text-sm leading-relaxed">
-                <p className="text-[10px] uppercase tracking-luxe text-muted-foreground">
+                <p className="kicker">
                   {c.source}
                   {c.url && (
                     <>
@@ -118,7 +110,7 @@ export function BacktestCard({ backtest }: Props) {
                     </>
                   )}
                 </p>
-                <p className="mt-1 text-foreground/90">&ldquo;{c.quote}&rdquo;</p>
+                <p className="mt-1.5 text-foreground/90">&ldquo;{c.quote}&rdquo;</p>
               </li>
             ) : null,
           )}
