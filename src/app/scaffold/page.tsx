@@ -4,7 +4,7 @@ import { sponsors, isDemoMode } from "@/lib/env";
 const PROVIDER_INFO: { key: keyof typeof sponsors; name: string; role: string }[] = [
   { key: "openai", name: "OpenAI", role: "Orchestrator brain (Chat Completions tool-use)" },
   { key: "tavily", name: "Tavily", role: "Public-web grounding for tavily_agent" },
-  { key: "pioneer", name: "Pioneer.ai", role: "GLiNER2 wine-domain classifier (inference)" },
+  { key: "pioneer", name: "Pioneer.ai", role: "feature_agent tier-1 LLM (Qwen / GLM / Llama-class)" },
 ];
 
 export default function ScaffoldPage() {

@@ -181,6 +181,23 @@ export const DICT = {
   "result.recommendations": { zh: "建议", fr: "Recommandations", en: "Recommendations" },
   "result.trace": { zh: "Agent 轨迹", fr: "Trace des agents", en: "Agent trace" },
 
+  // ── feature ───────────────────────────────────────────────────────────
+  "feature.summary.title": {
+    zh: "执行摘要",
+    fr: "Synthèse",
+    en: "Executive summary",
+  },
+  "feature.report.download": {
+    zh: "下载报告",
+    fr: "Télécharger le rapport",
+    en: "Download report",
+  },
+  "subscribe.preview_label": {
+    zh: "你将收到这样的周报：",
+    fr: "Vous recevrez un digest comme celui-ci :",
+    en: "You'll receive a digest like this:",
+  },
+
   // ── workflow ──────────────────────────────────────────────────────────
   "workflow.title": { zh: "工作流", fr: "Flux de travail", en: "Workflow" },
   "workflow.state.pending": { zh: "等待", fr: "En attente", en: "Pending" },

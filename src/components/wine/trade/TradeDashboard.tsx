@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useT } from "@/lib/i18n/Provider";
 import { BordeauxMap } from "@/components/wine/trade/BordeauxMap";
+import { ExecutiveSummary } from "@/components/wine/ExecutiveSummary";
 import { RiskCard } from "@/components/wine/RiskCard";
 import { DriverDonutChart } from "@/components/wine/charts/DriverDonutChart";
 import { WeatherLineChart } from "@/components/wine/charts/WeatherLineChart";
@@ -52,8 +53,15 @@ export function TradeDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2 print:hidden">
-          <ExportButton />
-          <SubscribeDialog regionId={selected.id} persona="trade" />
+          <ExportButton
+            reportMarkdown={result?.feature?.reportMarkdown}
+            filename={`wine-signals-${selected.id}.md`}
+          />
+          <SubscribeDialog
+            regionId={selected.id}
+            persona="trade"
+            digestPreview={result?.feature?.emailDigest}
+          />
         </div>
       </header>
 
@@ -89,6 +97,9 @@ export function TradeDashboard() {
         <section className="space-y-8">
           {result ? (
             <>
+              {result.feature?.executiveSummary && (
+                <ExecutiveSummary text={result.feature.executiveSummary} />
+              )}
               <RiskCard result={result} />
               <DriverDonutChart drivers={result.drivers} />
               <WeatherLineChart regionId={result.region.id} />

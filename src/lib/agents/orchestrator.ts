@@ -18,10 +18,12 @@ import type {
   AnalyzeInput,
   AnalyzeResult,
   AgentStepTrace,
+  FeatureSummary,
   Recommendation,
   RiskDriver,
 } from "@/lib/wine/types";
 import { bandOf } from "@/lib/wine/types";
+import type { ExtractionOutput } from "@/lib/agents/extraction";
 
 /**
  * Orchestrator — OpenAI Chat Completions tool-use loop.
@@ -66,15 +68,23 @@ const SYSTEM_PROMPT = `You are the wine-intelligence orchestrator. You evaluate 
 Procedure:
 1. Call weather_agent, geo_agent, and tavily_agent — they can be invoked in parallel (emit multiple tool_calls in one turn).
 2. Once all three have returned, call extraction_agent with COMPACT summaries (1–2 sentences each) of the upstream findings. Do not paste raw JSON.
-3. After extraction_agent returns, end the turn with one short sentence. Do not reformat extraction's output — the host harvests it from the tool trace.
+3. Once extraction_agent returns, call feature_agent. Pass:
+   - regionId and persona (unchanged from the host input)
+   - score (extraction's risk score)
+   - qualityBand (extraction's qualityBand)
+   - driversSummary: a single-sentence summary of extraction's top drivers
+   - recommendationsSummary: a single-sentence summary of extraction's recommendations
+   - rationale: extraction's rationale (verbatim if short, else compressed)
+4. After feature_agent returns, end the turn with one short sentence. The host harvests both extraction and feature outputs from the tool trace.
 
 Rules:
 - Never call extraction_agent before the three upstream agents have returned.
+- Never call feature_agent before extraction_agent has returned.
 - Always pass the regionId the host provided; never invent one.
 - If a sub-agent fails, proceed and note the gap to extraction_agent.
 - Be concise. No marketing copy.`;
 
-const MAX_STEPS = 8;
+const MAX_STEPS = 10;
 
 export async function analyze(
   input: AnalyzeInput,
@@ -90,6 +100,7 @@ export async function analyze(
     region: input.region,
     timeframe: input.timeframe,
     persona: input.persona,
+    uploads: input.uploads,
     signal: opts.signal ?? new AbortController().signal,
   };
 
@@ -177,11 +188,12 @@ export async function analyze(
 
 function harvest(input: AnalyzeInput, trace: AgentResult[]): AnalyzeResult {
   const extraction = [...trace].reverse().find((r) => r.agent === "extraction_agent" && r.ok);
-  const data = extraction?.data as
-    | { score: number; drivers: RiskDriver[]; recommendations: Recommendation[] }
-    | undefined;
+  const feature = [...trace].reverse().find((r) => r.agent === "feature_agent" && r.ok);
 
-  const score = data?.score ?? 0;
+  const extractionData = extraction?.data as Partial<ExtractionOutput> | undefined;
+  const featureData = feature?.data as FeatureSummary | undefined;
+
+  const score = extractionData?.score ?? 0;
   const sawFailure = trace.some((r) => !r.ok);
 
   return {
@@ -190,8 +202,12 @@ function harvest(input: AnalyzeInput, trace: AgentResult[]): AnalyzeResult {
     persona: input.persona,
     riskScore: score,
     riskBand: bandOf(score),
-    drivers: data?.drivers ?? [],
-    recommendations: data?.recommendations ?? [],
+    drivers: (extractionData?.drivers as RiskDriver[]) ?? [],
+    recommendations: (extractionData?.recommendations as Recommendation[]) ?? [],
+    qualityBand: extractionData?.qualityBand,
+    activeGates: extractionData?.activeGates,
+    rationale: extractionData?.rationale,
+    feature: featureData ?? null,
     trace: trace.map<AgentStepTrace>((r) => ({
       agent: r.agent,
       ok: r.ok,
@@ -200,6 +216,6 @@ function harvest(input: AnalyzeInput, trace: AgentResult[]): AnalyzeResult {
       summary: r.summary,
     })),
     generatedAt: new Date().toISOString(),
-    isDemoOrPartial: sawFailure || !data,
+    isDemoOrPartial: sawFailure || !extractionData,
   };
 }

@@ -1,5 +1,11 @@
 import "server-only";
-import type { AnalyzeInput, Persona, Region, Timeframe } from "@/lib/wine/types";
+import type {
+  AnalyzeInput,
+  Persona,
+  Region,
+  Timeframe,
+  UploadMeta,
+} from "@/lib/wine/types";
 
 /**
  * Agent framework — shared contract for every sub-agent in the wine
@@ -14,6 +20,13 @@ export interface AgentContext {
   region: Pick<Region, "id" | "name" | "parent">;
   timeframe: Timeframe;
   persona: Persona;
+  /**
+   * Vineyard-side user uploads (metadata only — name/size/mime). Available
+   * to any agent via `ctx.uploads`. The extraction agent in particular reads
+   * this as a "direct entry" so user-supplied evidence augments its OpenAI
+   * call without going through the GPT tool-use routing layer.
+   */
+  uploads?: UploadMeta[];
   /** Aborts when the request is cancelled or the orchestrator times out. */
   signal: AbortSignal;
 }
