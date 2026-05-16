@@ -36,14 +36,17 @@ export function BacktestCard({ backtest }: Props) {
           <p className="kicker">{t("backtest.title")}</p>
           <p className="kicker-strong mt-2 tabular">vintage {backtest.year}</p>
         </div>
-        <span
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-pill border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em]",
-            VERDICT_STYLE[backtest.verdict],
-          )}
-        >
-          {t(VERDICT_KEY[backtest.verdict])}
-        </span>
+        <div className="flex flex-col items-end gap-1">
+          <p className="kicker">{t("backtest.verdict_kicker")}</p>
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-pill border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em]",
+              VERDICT_STYLE[backtest.verdict],
+            )}
+          >
+            {t(VERDICT_KEY[backtest.verdict])}
+          </span>
+        </div>
       </header>
 
       <div className="mt-6 grid gap-6 md:grid-cols-2">
@@ -54,7 +57,10 @@ export function BacktestCard({ backtest }: Props) {
             {backtest.predictedScore}
           </p>
           {backtest.predictedBand && (
-            <p className="kicker mt-2">{backtest.predictedBand}</p>
+            <div className="mt-3 flex items-baseline gap-2">
+              <span className="kicker">{t("backtest.our_band")}</span>
+              <span className="text-sm font-medium">{backtest.predictedBand}</span>
+            </div>
           )}
         </div>
 

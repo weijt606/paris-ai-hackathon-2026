@@ -227,17 +227,12 @@ demo.** Here is what happens when each goes down:
 | `NEXT_PUBLIC_DEMO_FAST=true` **(default)** | orchestrator uses `directDispatch()` (fixed-order parallel pipeline, no GPT routing), Tavily cache pre-hydrated from `data/tavily-cache-export.json`, OpenAI model pinned to `gpt-4o-mini` for all agent LLM calls. **Full agent stack runs** — extraction sees weather + geo + Tavily; feature_agent uses the 3-tier ladder (Pioneer → OpenAI → template); Tavily `max_results_per_query` stays at 5. | invisible at the product layer; visible in `trace[]` durations (typical cold call: forward ~45-55 s · backtest ~45-55 s · warm/cached <50 ms) |
 | `NEXT_PUBLIC_DEMO_FAST=false` | orchestrator uses the legacy OpenAI Chat Completions tool-use loop — the LLM decides what to call when | typical cold call ~80 s; useful for experimenting with adaptive routing |
 
-**Cache-aware Tavily feed (the accuracy/speed compromise):**
-extraction must see the Tavily signal to weight drivers correctly, but
-serialising Tavily before extraction would push the wallclock to ~30 s
-of pure Tavily wait on cold calls. Compromise: fire Tavily, race it
-against a 3-second budget. SQLite cache hits (~100 ms) and warm fetches
-(1-2 s) clear the budget — extraction starts with full evidence. Cold
-fetches (6-10 s) exceed the budget, extraction starts without Tavily
-in the prompt, but Tavily keeps running concurrently in the background
-and still reaches the trace + backtest. So: cached path = full accuracy,
-cold path = mild driver-weighting bias toward weather/geo on the very
-first call only.
+**Accuracy contract:** extraction always sees weather + geo + Tavily.
+All three sub-agents fire in parallel and we wait for ALL of them
+before extraction starts. Wallclock is whatever Tavily takes (cache
+hit ~100 ms; cold network 6-10 s; weather and geo are bundled CSVs
+and resolve in <50 ms). On every call, every driver, every score,
+the public-web signal is in the prompt — no degraded paths.
 
 This is the H2/H3 contract in `CLAUDE.md` made concrete — every adapter is
 gated, every failure is observable in `trace[]`, demo mode is the rehearsal
@@ -255,17 +250,18 @@ path is selected by `NEXT_PUBLIC_DEMO_FAST`:
 | Phase | Wallclock | Tokens (OpenAI) | Pioneer calls |
 |---|---|---|---|
 | Cache hit (orchestrator) | <50 ms | 0 | 0 |
-| Cold phase 1: weather + geo (parallel, bundled CSV) | <100 ms | 0 | 0 |
-| Cold phase 1b: Tavily race vs 3 s budget | up to 3 s | 0 | 0 |
-| Cold phase 2: extraction (full 3 signals when Tavily made the budget) | ~15-20 s | ~3-4 k in / ~1.5 k out | 0 |
-| Cold phase 3: feature (Pioneer tier 1) + backtest (parallel) | ~20-30 s | ~3-4 k in / ~1.5 k out | 1 (~2 k in / ~1 k out) |
-| **Cold forward call (no backtest)** | **~45-55 s** | **~6-8 k in / ~3 k out** | **1** |
-| **Cold backtest call** | **~45-55 s** | **~8-10 k in / ~4 k out** | **1** |
+| Cold phase 1: weather + geo + Tavily (all parallel; Tavily is the long pole) | ~6-10 s | 0 | 0 |
+| Cold phase 2: extraction with full 3 signals | ~7-20 s | ~3-4 k in / ~1.5 k out | 0 |
+| Cold phase 3: feature (Pioneer tier 1) + backtest (parallel) | ~10-30 s | ~3-4 k in / ~1.5 k out | 1 (~2 k in / ~1 k out) |
+| **Cold forward call (no backtest)** | **~35-55 s** | **~6-8 k in / ~3 k out** | **1** |
+| **Cold backtest call** | **~35-55 s** | **~8-10 k in / ~4 k out** | **1** |
 | **Warm call (cache hit)** | **<50 ms** | 0 | 0 |
 
-Feature is the dominant cost because Pioneer (Qwen-7B class) takes
-10-30 s — that's the price of the "small open-source LLM wraps the
-numbers" sponsor story. Backtest overlaps with it in phase 3, so it's
+Tavily is the phase-1 long pole (weather/geo are bundled CSVs). On the
+demo path with a hydrated SQLite cache it drops to ~100 ms. Feature is
+the phase-3 long pole because Pioneer (Qwen-7B class) takes 10-30 s —
+that's the price of the "small open-source LLM wraps the numbers"
+sponsor story. Backtest overlaps with feature in phase 3, so it's
 effectively free wallclock on the backtest path.
 
 ### Legacy GPT-routing path (`DEMO_FAST=false`)
