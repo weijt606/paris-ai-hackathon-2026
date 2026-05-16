@@ -25,10 +25,17 @@ export interface ExtractionOutput {
 /**
  * STUB — heuristic risk evaluator. Owner: dev team (modelling track).
  *
- * Expected scope: replace `run()` body with a Claude structured-output call
- * that consumes the signal bag and emits scored drivers + persona-specific
- * recommendations. Until then, this deterministic heuristic keeps the
- * orchestrator end-to-end testable.
+ * Expected scope: replace `run()` body with one of:
+ *  (a) OpenAI structured-output call — `chat.completions.create` with
+ *      `response_format: { type: "json_schema", json_schema: {...} }` to
+ *      force a typed risk JSON. Cheap, flexible, free-text reasoning.
+ *  (b) Pioneer GLiNER2 classifier via `classify()` for risk_band tagging,
+ *      then a small heuristic to map band → score + drivers. Best when
+ *      you have a trained wine-domain classifier on Pioneer.
+ *  (c) Hybrid: Pioneer for band, OpenAI for driver/recommendation narrative.
+ *
+ * Until then, this deterministic heuristic keeps the orchestrator end-to-end
+ * testable.
  *
  * Contract guarantees:
  *  - score is bounded 0–100
@@ -84,7 +91,7 @@ export const extractionAgent: SubAgent<ExtractionInput, ExtractionOutput> = {
         score,
         drivers,
         recommendations,
-        rationale: `TODO(dev): replace with Claude structured-output call. Heuristic placeholder using ${present.length}/3 upstream signals.`,
+        rationale: `TODO(dev): replace with OpenAI structured-output and/or Pioneer classifier. Heuristic placeholder using ${present.length}/3 upstream signals.`,
       },
       summary: `heuristic score ${score}`,
     };

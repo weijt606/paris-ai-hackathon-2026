@@ -7,7 +7,8 @@ This file is loaded into every Claude Code session in this repo.
 - **Event:** Paris AI Hackathon 2026 — single-day sprint hosted by {Tech: Europe} + Hexa
 - **Format:** ~7h coding window (10:45 → 17:30), Live demo at 18:00
 - **Chosen product:** Wine intelligence — risk + market signals for Burgundy & Bordeaux, dual persona (vineyard | trade).
-- **Architecture:** Orchestrator agent (Claude tool-use loop) → weather/geo/tavily sub-agents → extraction_agent → dashboard. Optional pioneer.ai post-training feedback loop.
+- **Sponsors:** OpenAI · Tavily · Pioneer.ai
+- **Architecture:** Orchestrator agent (OpenAI Chat Completions tool-use loop) → weather/geo/tavily sub-agents → extraction_agent → dashboard. Pioneer.ai GLiNER2 classifier consumed via `classify()` from extraction / feature agents.
 - **Repo visibility:** Shared with teammates AND hackathon organizers — never commit secrets or PII.
 - **Collab doc:** [`docs/AGENTS.zh.md`](docs/AGENTS.zh.md) — assignments, contracts, recipes (Chinese).
 
@@ -15,7 +16,9 @@ This file is loaded into every Claude Code session in this repo.
 
 - Next.js 15 (App Router) + React 19 + TypeScript (strict)
 - Tailwind v3
-- `@anthropic-ai/sdk` (Claude tool-use orchestrator)
+- `openai` SDK (Chat Completions tool-use orchestrator)
+- Tavily (public-web grounding, called via `fetch`)
+- Pioneer.ai GLiNER2 inference API (called via `fetch`)
 - `zod` for env + API validation
 - pnpm (`>=10`), node `>=20`
 
@@ -25,8 +28,8 @@ No DB, no Vercel AI SDK, no shadcn — kept tight to what the agents actually ne
 
 Pre-event:
 1. `pnpm install`
-2. `cp .env.example .env.local`, fill `ANTHROPIC_API_KEY` (required) + `TAVILY_API_KEY` (optional) + `PIONEER_API_KEY` (when owner provides)
-3. `pnpm check:env` to verify Anthropic actually pings
+2. `cp .env.example .env.local`, fill `OPENAI_API_KEY` (required), `TAVILY_API_KEY` + `PIONEER_API_KEY` + `PIONEER_MODEL_ID` (optional)
+3. `pnpm check:env` to verify OpenAI actually pings
 4. `pnpm dev` and confirm `/api/health` returns 200
 5. Set `NEXT_PUBLIC_DEMO_MODE=true` and re-test `/api/analyze` end-to-end on fixtures — this is the rehearsal fallback
 

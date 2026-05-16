@@ -2,13 +2,14 @@ import "server-only";
 import { z } from "zod";
 
 const serverSchema = z.object({
-  ANTHROPIC_API_KEY: z.string().min(1).optional(),
-  ANTHROPIC_MODEL: z.string().min(1).default("claude-sonnet-4-6"),
+  OPENAI_API_KEY: z.string().min(1).optional(),
+  OPENAI_MODEL: z.string().min(1).default("gpt-4o-mini"),
 
   TAVILY_API_KEY: z.string().min(1).optional(),
 
   PIONEER_API_KEY: z.string().min(1).optional(),
   PIONEER_BASE_URL: z.string().url().default("https://api.pioneer.ai"),
+  PIONEER_MODEL_ID: z.string().min(1).optional(),
 });
 
 const publicSchema = z.object({
@@ -41,13 +42,13 @@ function parseEnv() {
 export const env = parseEnv();
 
 export const sponsors = {
-  anthropic: Boolean(env.ANTHROPIC_API_KEY),
-} as const;
-
-export const integrations = {
+  openai: Boolean(env.OPENAI_API_KEY),
   tavily: Boolean(env.TAVILY_API_KEY),
   pioneer: Boolean(env.PIONEER_API_KEY),
 } as const;
+
+/** Convenience alias — same map, different reading. */
+export const integrations = sponsors;
 
 export const isDemoMode = env.NEXT_PUBLIC_DEMO_MODE;
 

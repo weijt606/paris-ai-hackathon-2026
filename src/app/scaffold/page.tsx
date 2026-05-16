@@ -1,13 +1,10 @@
 import Link from "next/link";
-import { sponsors, integrations, isDemoMode } from "@/lib/env";
+import { sponsors, isDemoMode } from "@/lib/env";
 
 const PROVIDER_INFO: { key: keyof typeof sponsors; name: string; role: string }[] = [
-  { key: "anthropic", name: "Anthropic", role: "Orchestrator brain (Claude tool-use)" },
-];
-
-const INTEGRATION_INFO: { key: keyof typeof integrations; name: string; role: string }[] = [
+  { key: "openai", name: "OpenAI", role: "Orchestrator brain (Chat Completions tool-use)" },
   { key: "tavily", name: "Tavily", role: "Public-web grounding for tavily_agent" },
-  { key: "pioneer", name: "Pioneer.ai", role: "Post-training / self-evolving (stub)" },
+  { key: "pioneer", name: "Pioneer.ai", role: "GLiNER2 wine-domain classifier (inference)" },
 ];
 
 export default function ScaffoldPage() {
@@ -15,7 +12,7 @@ export default function ScaffoldPage() {
     <main className="container mx-auto max-w-4xl px-6 py-16">
       <header className="mb-12">
         <p className="text-sm uppercase tracking-widest text-muted-foreground">Config status</p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight">Providers & integrations</h1>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight">Sponsors & integrations</h1>
         <p className="mt-3 text-muted-foreground">
           Env-gated. Drop a key into <code>.env.local</code> to enable.
         </p>
@@ -28,19 +25,10 @@ export default function ScaffoldPage() {
       </header>
 
       <section className="mb-10">
-        <h2 className="mb-4 text-xl font-semibold">Orchestrator</h2>
+        <h2 className="mb-4 text-xl font-semibold">Sponsors</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           {PROVIDER_INFO.map((s) => (
             <Card key={s.key} name={s.name} role={s.role} on={sponsors[s.key]} />
-          ))}
-        </div>
-      </section>
-
-      <section className="mb-10">
-        <h2 className="mb-4 text-xl font-semibold">Sub-agent integrations</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {INTEGRATION_INFO.map((s) => (
-            <Card key={s.key} name={s.name} role={s.role} on={integrations[s.key]} />
           ))}
         </div>
       </section>

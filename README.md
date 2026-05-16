@@ -2,14 +2,15 @@
 
 Multi-agent risk + market intelligence for French wine regions (Burgundy & Bordeaux). Built for the Paris AI Hackathon 2026.
 
-**Architecture:** Orchestrator (Claude tool-use loop) → weather / geo / tavily sub-agents → extraction_agent → dashboard. Optional pioneer.ai for post-training feedback.
+**Sponsors:** OpenAI · Tavily · Pioneer.ai
+**Architecture:** Orchestrator (OpenAI Chat Completions tool-use loop) → weather / geo / tavily sub-agents → extraction_agent → dashboard. Pioneer.ai GLiNER2 classifier (trained on wine-industry data) consumed via `classify()` from extraction / feature agents.
 
 ## Quick start
 
 ```bash
 pnpm install
-cp .env.example .env.local       # fill ANTHROPIC_API_KEY (required)
-pnpm check:env                   # verify Anthropic pings
+cp .env.example .env.local       # fill OPENAI_API_KEY (required)
+pnpm check:env                   # verify OpenAI + Tavily + Pioneer keys
 pnpm dev                         # → http://localhost:3000
 ```
 
@@ -39,7 +40,7 @@ src/
 │   └── SignalsList.tsx            # agent trace
 ├── lib/
 │   ├── agents/                    # ← agent framework
-│   │   ├── orchestrator.ts        # Claude tool-use loop (routing layer)
+│   │   ├── orchestrator.ts        # OpenAI tool-use loop (routing layer)
 │   │   ├── types.ts               # SubAgent contract, runAgentSafely
 │   │   ├── extraction.ts          # risk evaluator (heuristic stub)
 │   │   ├── feature.ts             # feature layer (TBD)
@@ -47,8 +48,8 @@ src/
 │   │       ├── weather.ts         # climate + forecast (stub)
 │   │       ├── geo.ts             # terroir + appellation (stub)
 │   │       └── tavily.ts          # public-web grounding (stub)
-│   ├── ai/anthropic.ts            # lazy Anthropic client (used by orchestrator)
-│   ├── training/pioneer.ts        # post-training adapter (stub)
+│   ├── ai/openai.ts               # lazy OpenAI client (used by orchestrator)
+│   ├── training/pioneer.ts        # Pioneer GLiNER2 classifier (classify())
 │   ├── wine/                      # domain
 │   │   ├── types.ts               # AnalyzeInput, AnalyzeResult, etc.
 │   │   └── regions.ts             # static Burgundy + Bordeaux list

@@ -19,9 +19,9 @@
     "check:env": "tsx scripts/check-env.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.40.0",
     "clsx": "^2.1.1",
     "next": "^15.1.6",
+    "openai": "^4.78.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "server-only": "^0.0.1",

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AnalyzePanel } from "@/components/wine/AnalyzePanel";
-import { isDemoMode, sponsors, integrations } from "@/lib/env";
+import { isDemoMode, sponsors } from "@/lib/env";
 
 export default function Home() {
   return (
@@ -12,15 +12,15 @@ export default function Home() {
           </p>
           <h1 className="mt-1 text-3xl font-bold tracking-tight">Wine signals dashboard</h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Orchestrator agent (Claude tool-use) routes to weather, geo, and public-web sub-agents,
+            Orchestrator agent (OpenAI tool calling) routes to weather, geo, and public-web sub-agents,
             then extraction_agent scores cumulative risk. Persona-aware recommendations for
             vineyards and trade buyers.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <Badge ok={sponsors.anthropic} label="orchestrator: anthropic" />
-          <Badge ok={integrations.tavily} label="tavily" />
-          <Badge ok={integrations.pioneer} label="pioneer.ai" />
+          <Badge ok={sponsors.openai} label="orchestrator: openai" />
+          <Badge ok={sponsors.tavily} label="tavily" />
+          <Badge ok={sponsors.pioneer} label="pioneer.ai" />
           {isDemoMode && (
             <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-amber-700 dark:text-amber-300">
               demo mode

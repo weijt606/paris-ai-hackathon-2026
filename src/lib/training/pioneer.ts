@@ -1,63 +1,90 @@
 import "server-only";
 import { env, integrations, isDemoMode } from "@/lib/env";
-import { SponsorUnavailableError } from "@/lib/utils";
-import type { AnalyzeInput, AnalyzeResult } from "@/lib/wine/types";
 
 /**
- * Pioneer.ai adapter — STUB.
+ * Pioneer.ai inference adapter (GLiNER2 entity classifier).
  *
- * Owner provides docs + key. This file defines the call surface used by the
- * orchestrator / feature_agent so the rest of the code can be written
- * against a stable contract.
+ * Workflow:
+ *   1. Train a classifier on the Pioneer dashboard with your domain data
+ *      (offline — not done in this repo). Take note of the resulting model id.
+ *   2. Set PIONEER_API_KEY + PIONEER_MODEL_ID in .env.local.
+ *   3. Call `classify({ text, task, labels })` from a sub-agent — typically
+ *      from `extraction_agent` (risk band classification) or `feature_agent`
+ *      (specialised wine-domain features).
  *
- * Two flows we expect:
- *   - `recordCase(input, result)` — log analyses so pioneer can post-train
- *     on (input, signals, outcome) tuples.
- *   - `getInsights(regionId)` — fetch self-evolved patterns to fold into
- *     feature_agent.
- *
- * Until the real endpoints are confirmed, both return cheap placeholders;
- * none of the orchestrator code is allowed to block on pioneer.
+ * Returns `null` on any failure (missing key, network, timeout, bad response)
+ * so callers can fall back to their heuristic path without try/catch noise.
  */
 
-export interface PioneerCaseRef {
-  id: string;
-  recordedAt: string;
+const DEFAULT_TIMEOUT_MS = 8_000;
+
+export interface ClassifyInput {
+  /** The text to classify. Keep it short and structured — GLiNER2 is best on payloads, not essays. */
+  text: string;
+  /** Logical name of the classification task, e.g. "risk_band" or "driver_kind". */
+  task: string;
+  /** Closed label set. Must match the labels you trained the model on. */
+  labels: readonly string[];
+  /** Override the env model id (e.g., when you train multiple classifiers). */
+  modelId?: string;
+  /** Override the default 8s ceiling. */
+  timeoutMs?: number;
 }
 
-export interface PioneerInsight {
-  /** Stable id of the insight pattern. */
-  id: string;
-  /** Short human-readable label, e.g. "frost+market_softness Q2". */
-  label: string;
-  /** Confidence from pioneer's model. */
-  confidence: number;
-  /** Free-form payload — shape will be defined once docs land. */
-  payload: Record<string, unknown>;
+export interface ClassifyResult {
+  /** The matched label, or `null` if Pioneer returned something not in `labels`. */
+  label: string | null;
+  /** Model id Pioneer was queried against. */
+  modelId: string;
+  latencyMs: number;
 }
 
-export async function recordCase(
-  input: AnalyzeInput,
-  result: AnalyzeResult,
-): Promise<PioneerCaseRef> {
-  if (isDemoMode) return { id: `demo-${Date.now()}`, recordedAt: new Date().toISOString() };
-  if (!integrations.pioneer) throw new SponsorUnavailableError("pioneer");
+export async function classify({
+  text,
+  task,
+  labels,
+  modelId,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+}: ClassifyInput): Promise<ClassifyResult | null> {
+  if (isDemoMode) return null;
+  if (!integrations.pioneer || !env.PIONEER_API_KEY) return null;
 
-  // TODO(owner): POST to `${env.PIONEER_BASE_URL}/v1/cases` once docs arrive.
-  // Body shape (proposed):
-  //   { input, result, traceVersion: 1 }
-  // Auth: Bearer ${env.PIONEER_API_KEY}
-  void env.PIONEER_BASE_URL;
-  void input;
-  void result;
-  return { id: `stub-${Date.now()}`, recordedAt: new Date().toISOString() };
-}
+  const resolvedModelId = modelId ?? env.PIONEER_MODEL_ID;
+  if (!resolvedModelId) return null;
 
-export async function getInsights(regionId: string): Promise<PioneerInsight[]> {
-  if (isDemoMode) return [];
-  if (!integrations.pioneer) return [];
+  if (typeof text !== "string" || text.trim() === "") {
+    return { label: null, modelId: resolvedModelId, latencyMs: 0 };
+  }
 
-  // TODO(owner): GET `${env.PIONEER_BASE_URL}/v1/insights?regionId=...`
-  void regionId;
-  return [];
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const startedAt = Date.now();
+  try {
+    const res = await fetch(`${env.PIONEER_BASE_URL}/inference`, {
+      method: "POST",
+      headers: {
+        "X-API-Key": env.PIONEER_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model_id: resolvedModelId,
+        text,
+        schema: { classifications: [{ task, labels: [...labels] }] },
+      }),
+      signal: ctrl.signal,
+    });
+    const latencyMs = Date.now() - startedAt;
+    if (!res.ok) return { label: null, modelId: resolvedModelId, latencyMs };
+
+    const data = (await res.json().catch(() => null)) as
+      | { result?: Record<string, unknown> }
+      | null;
+    const raw = data?.result?.[task];
+    const label = typeof raw === "string" && labels.includes(raw) ? raw : null;
+    return { label, modelId: resolvedModelId, latencyMs };
+  } catch {
+    return { label: null, modelId: resolvedModelId, latencyMs: Date.now() - startedAt };
+  } finally {
+    clearTimeout(timer);
+  }
 }

@@ -1,7 +1,7 @@
 import "server-only";
-import type Anthropic from "@anthropic-ai/sdk";
+import type OpenAI from "openai";
 import { env, isDemoMode, sponsors } from "@/lib/env";
-import { anthropicClient } from "@/lib/ai/anthropic";
+import { openaiClient } from "@/lib/ai/openai";
 import { demoWineAnalysis } from "@/lib/demo/fixtures";
 import {
   type AgentContext,
@@ -24,17 +24,18 @@ import type {
 import { bandOf } from "@/lib/wine/types";
 
 /**
- * Orchestrator — Claude tool-use loop.
+ * Orchestrator — OpenAI Chat Completions tool-use loop.
  *
- * Routing layer ONLY: registers sub-agents as Claude tools, dispatches by
- * name, collects a structured trace, harvests the final result from the
- * extraction_agent's last successful call. Sub-agent bodies are stubs owned
- * by the dev team — replace them without touching this file.
+ * Routing layer ONLY: registers sub-agents as OpenAI function tools,
+ * dispatches by name, collects a structured trace, harvests the final
+ * result from the extraction_agent's last successful call. Sub-agent
+ * bodies are stubs owned by the dev team — replace them without touching
+ * this file.
  *
  * Degradation order:
- *   1. demo mode      → fixture
- *   2. no Anthropic   → fixture (orchestrator brain missing; flagged as partial)
- *   3. step budget    → harvest whatever extraction produced; band reflects it
+ *   1. demo mode   → fixture
+ *   2. no OpenAI   → fixture (orchestrator brain missing; flagged as partial)
+ *   3. step budget → harvest whatever extraction produced; band reflects it
  */
 
 type AnyAgent = SubAgent<unknown, unknown>;
@@ -49,25 +50,28 @@ register(tavilyAgent);
 register(extractionAgent);
 register(featureAgent);
 
-function toolDescriptors(): Anthropic.Tool[] {
+function toolDescriptors(): OpenAI.Chat.Completions.ChatCompletionTool[] {
   return Array.from(REGISTRY.values()).map((a) => ({
-    name: a.name,
-    description: a.description,
-    input_schema: a.input_schema as Anthropic.Tool["input_schema"],
+    type: "function",
+    function: {
+      name: a.name,
+      description: a.description,
+      parameters: a.input_schema as Record<string, unknown>,
+    },
   }));
 }
 
 const SYSTEM_PROMPT = `You are the wine-intelligence orchestrator. You evaluate cultivation and market risk for a French wine region by calling the registered sub-agent tools.
 
 Procedure:
-1. Call weather_agent, geo_agent, and tavily_agent — they can be invoked in parallel.
+1. Call weather_agent, geo_agent, and tavily_agent — they can be invoked in parallel (emit multiple tool_calls in one turn).
 2. Once all three have returned, call extraction_agent with COMPACT summaries (1–2 sentences each) of the upstream findings. Do not paste raw JSON.
 3. After extraction_agent returns, end the turn with one short sentence. Do not reformat extraction's output — the host harvests it from the tool trace.
 
 Rules:
 - Never call extraction_agent before the three upstream agents have returned.
 - Always pass the regionId the host provided; never invent one.
-- If a sub-agent fails (ok:false), proceed and note the gap to extraction_agent.
+- If a sub-agent fails, proceed and note the gap to extraction_agent.
 - Be concise. No marketing copy.`;
 
 const MAX_STEPS = 8;
@@ -77,7 +81,7 @@ export async function analyze(
   opts: { signal?: AbortSignal } = {},
 ): Promise<AnalyzeResult> {
   if (isDemoMode) return demoWineAnalysis(input);
-  if (!sponsors.anthropic) {
+  if (!sponsors.openai) {
     const fixture = demoWineAnalysis(input);
     return { ...fixture, isDemoOrPartial: true };
   }
@@ -90,7 +94,7 @@ export async function analyze(
   };
 
   const trace: AgentResult[] = [];
-  const client = anthropicClient();
+  const client = openaiClient();
 
   const bootstrap = [
     `Region: ${input.region.name} (id=${input.region.id}, parent=${input.region.parent})`,
@@ -101,51 +105,71 @@ export async function analyze(
     .filter(Boolean)
     .join("\n");
 
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: bootstrap }];
+  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+    { role: "system", content: SYSTEM_PROMPT },
+    { role: "user", content: bootstrap },
+  ];
 
   for (let step = 0; step < MAX_STEPS; step++) {
     if (opts.signal?.aborted) throw new Error("Aborted");
 
-    const res = await client.messages.create({
-      model: env.ANTHROPIC_MODEL,
-      max_tokens: 1024,
-      system: SYSTEM_PROMPT,
-      tools: toolDescriptors(),
-      messages,
-    });
-
-    if (res.stop_reason === "end_turn") break;
-    if (res.stop_reason !== "tool_use") {
-      throw new Error(`Orchestrator: unexpected stop_reason '${res.stop_reason}'`);
-    }
-
-    const toolUses = res.content.filter(
-      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+    const res = await client.chat.completions.create(
+      {
+        model: env.OPENAI_MODEL,
+        messages,
+        tools: toolDescriptors(),
+        tool_choice: "auto",
+      },
+      { signal: opts.signal },
     );
-    messages.push({ role: "assistant", content: res.content });
 
-    const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
-      toolUses.map(async (tu) => {
-        const agent = REGISTRY.get(tu.name);
-        if (!agent) {
+    const msg = res.choices[0]?.message;
+    if (!msg) throw new Error("Orchestrator: empty completion");
+
+    const toolCalls = msg.tool_calls ?? [];
+    if (toolCalls.length === 0) break;
+
+    messages.push(msg);
+
+    const toolMessages: OpenAI.Chat.Completions.ChatCompletionToolMessageParam[] =
+      await Promise.all(
+        toolCalls.map(async (tc) => {
+          if (tc.type !== "function") {
+            return {
+              role: "tool",
+              tool_call_id: tc.id,
+              content: `Unsupported tool call type: ${tc.type}`,
+            };
+          }
+          const agent = REGISTRY.get(tc.function.name);
+          if (!agent) {
+            return {
+              role: "tool",
+              tool_call_id: tc.id,
+              content: `Unknown tool: ${tc.function.name}`,
+            };
+          }
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(tc.function.arguments || "{}");
+          } catch (e) {
+            return {
+              role: "tool",
+              tool_call_id: tc.id,
+              content: `Invalid JSON arguments: ${e instanceof Error ? e.message : String(e)}`,
+            };
+          }
+          const result = await runAgentSafely(agent, parsed, ctx);
+          trace.push(result);
           return {
-            type: "tool_result",
-            tool_use_id: tu.id,
-            is_error: true,
-            content: `Unknown tool: ${tu.name}`,
+            role: "tool",
+            tool_call_id: tc.id,
+            content: JSON.stringify(result.data ?? { error: result.error }),
           };
-        }
-        const result = await runAgentSafely(agent, tu.input, ctx);
-        trace.push(result);
-        return {
-          type: "tool_result",
-          tool_use_id: tu.id,
-          is_error: !result.ok,
-          content: JSON.stringify(result.data ?? { error: result.error }),
-        };
-      }),
-    );
-    messages.push({ role: "user", content: toolResults });
+        }),
+      );
+
+    messages.push(...toolMessages);
   }
 
   return harvest(input, trace);

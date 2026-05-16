@@ -20,9 +20,9 @@
                          ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │  Orchestrator  (src/lib/agents/orchestrator.ts)                  │
-│   Claude tool-use 循环 · 路由层 · 不要改它                          │
-│   • 注册 SubAgent → 转 Anthropic.Tool                             │
-│   • dispatch tool_use → runAgentSafely → 收集 trace                │
+│   OpenAI Chat Completions tool-use 循环 · 路由层 · 不要改它          │
+│   • 注册 SubAgent → 转 OpenAI function tool                       │
+│   • dispatch tool_calls → runAgentSafely → 收集 trace              │
 │   • 末尾 harvest extraction_agent 输出 → AnalyzeResult            │
 └────────────────────────┬─────────────────────────────────────────┘
                          │ 并行调用
@@ -38,11 +38,11 @@
                          │
                          ▼
                    feature_agent                       ◄── 待定义
-                   (TBD)                                  接 pioneer.ai
+                   (TBD)                                  调 pioneer.classify()
                          │
                          ▼
-                   pioneer.ai                          ◄── 自演化训练
-                   (recordCase / getInsights)            adapter 已 stub
+                   Pioneer.ai GLiNER2                  ◄── 行业数据分类器
+                   (classify({text,task,labels}))        在 Pioneer 平台离线训练
 ```
 
 **关键原则：**
@@ -56,14 +56,14 @@
 
 | 文件 | 用途 | 状态 | 推荐 Owner |
 |---|---|---|---|
-| `src/lib/agents/orchestrator.ts` | Claude tool-use 路由循环 | ✅ 完成 | — (勿改) |
+| `src/lib/agents/orchestrator.ts` | OpenAI tool-use 路由循环 | ✅ 完成 | — (勿改) |
 | `src/lib/agents/types.ts` | SubAgent 契约 + AgentResult | ✅ 完成 | — (勿改) |
 | `src/lib/agents/sub-agents/weather.ts` | 历史气候 + 官方预报 | 🟡 stub | **Dev A** |
 | `src/lib/agents/sub-agents/geo.ts` | 地理 / 风土 / appellation 边界 | 🟡 stub | **Dev B** |
 | `src/lib/agents/sub-agents/tavily.ts` | 公开网络搜索（酒庄/媒体/政府/论坛） | 🟡 stub | **Dev C** |
 | `src/lib/agents/extraction.ts` | 风险打分 + 推荐生成 | 🟡 heuristic stub | **Dev D**（模型方向） |
 | `src/lib/agents/feature.ts` | 特征层（待定义） | 🟡 stub | **TBD（owner 后续给）** |
-| `src/lib/training/pioneer.ts` | pioneer.ai 后训练 adapter | 🟡 stub | **owner 给 docs 后** |
+| `src/lib/training/pioneer.ts` | Pioneer GLiNER2 classifier (`classify()`) | ✅ 完成 | data team 训练模型，dev 接入 |
 | `src/lib/wine/types.ts` | 域类型（AnalyzeInput/Result 等） | ✅ 完成 | — (共享) |
 | `src/lib/wine/regions.ts` | Burgundy + Bordeaux 静态产区清单 | ✅ 完成 | 可扩展 |
 | `src/app/api/analyze/route.ts` | POST 入口 | ✅ 完成 | — (勿改) |
@@ -78,23 +78,23 @@
 
 ```ts
 export interface SubAgent<TInput, TData> {
-  name: string;              // snake_case，必须唯一，传给 Claude 当 tool name
-  description: string;       // 告诉 Claude WHEN to call this，要具体
-  input_schema: JsonSchema;  // tool 输入的 JSON-schema，Claude 据此填参数
+  name: string;              // snake_case，必须唯一，传给 OpenAI 当 tool name
+  description: string;       // 告诉 OpenAI WHEN to call this，要具体
+  input_schema: JsonSchema;  // tool 输入的 JSON-schema，OpenAI 据此填参数
   run(input: TInput, ctx: AgentContext): Promise<AgentResult<TData>>;
 }
 ```
 
 **Orchestrator 的承诺**：
-- 不会让 sub-agent 之间互相调用 —— 所有协调由 Claude 在 tool-use 循环里完成。
+- 不会让 sub-agent 之间互相调用 —— 所有协调由 OpenAI 在 tool-use 循环里完成。
 - 单个 sub-agent 抛错不会让整个 loop 崩溃（`runAgentSafely` 包了 try/catch）。
 - `ctx.signal: AbortSignal` 会在请求被取消 / 超时时触发，长任务请 honor 它。
 
 **你的 sub-agent 必须保证**：
 - ✅ `run()` 永远 resolve，永远不要 reject（错误用 `{ ok: false, error: "..." }`）。
 - ✅ 返回的 `data` 类型与你声明的 `TData` 一致 —— extraction_agent 会按此读取。
-- ✅ `input_schema` 描述准确 —— Claude 看 description + schema 决定怎么调你。
-- ❌ 不要在 sub-agent 里调 Claude 做"主决策" —— 那是 orchestrator 的职责。
+- ✅ `input_schema` 描述准确 —— OpenAI 看 description + schema 决定怎么调你。
+- ❌ 不要在 sub-agent 里调 OpenAI 做"主决策" —— 那是 orchestrator 的职责。
 - ❌ 不要往 `src/lib/agents/orchestrator.ts` 里加分支 —— 替换 stub body 即可。
 
 ---
@@ -211,38 +211,61 @@ curl -X POST http://localhost:3000/api/analyze \
 
 `extraction.ts` 当前是**确定性启发式**（计 3 个上游 ok 数 × 10 + 30），目的是让 orchestrator 端到端跑通。
 
-**真实实现建议**：
+**真实实现建议** — 三选一或组合：
+
+**(a) OpenAI structured output（推荐起步方案）**
 
 ```ts
-async run(input) {
-  if (!sponsors.anthropic) return heuristicFallback(input);
+import { openaiClient } from "@/lib/ai/openai";
 
-  const client = anthropicClient();
-  const res = await client.messages.create({
-    model: env.ANTHROPIC_MODEL,
-    max_tokens: 1024,
-    system: EXTRACTION_SYSTEM_PROMPT,
-    messages: [{
-      role: "user",
-      content: buildExtractionPrompt(input),  // 拼 weather/geo/tavily summaries
-    }],
-    // 用 tool_use 强制 JSON 输出：
-    tools: [{
-      name: "submit_risk",
-      description: "Submit final risk score, drivers, and recommendations.",
-      input_schema: RISK_SCHEMA,
-    }],
-    tool_choice: { type: "tool", name: "submit_risk" },
+async run(input) {
+  if (!sponsors.openai) return heuristicFallback(input);
+
+  const client = openaiClient();
+  const res = await client.chat.completions.create({
+    model: env.OPENAI_MODEL,
+    messages: [
+      { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
+      { role: "user", content: buildExtractionPrompt(input) },  // 拼 weather/geo/tavily summaries
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "risk_assessment",
+        strict: true,
+        schema: RISK_SCHEMA,   // score / drivers / recommendations / rationale
+      },
+    },
   });
   return parseStructuredOutput(res);
 }
 ```
 
+**(b) Pioneer GLiNER2 classifier（如果 data team 已经训好模型）**
+
+```ts
+import { classify } from "@/lib/training/pioneer";
+
+async run(input) {
+  const cls = await classify({
+    text: buildExtractionPrompt(input),
+    task: "risk_band",
+    labels: ["low", "moderate", "elevated", "high"],
+  });
+  // cls?.label = 训练好的 wine-domain 分类器输出
+  // 把 band 映射到 score（如 "high" → 78），drivers 用启发式拆分
+  if (!cls?.label) return heuristicFallback(input);
+  return mapBandToOutput(cls.label, input);
+}
+```
+
+**(c) 混合**：Pioneer 出 band（结构化、确定性强），OpenAI 出 driver/recommendation narrative（自由文本灵活）。
+
 **契约必须满足**：
 - `score` ∈ [0, 100]
 - `drivers[].weight` 之和 ≤ 1.0
 - `recommendations[].persona` 全等于 `input.persona`
-- 即使 LLM 调用失败，也要返回 heuristic fallback，不能 reject
+- 即使 LLM/classifier 调用失败，也要返回 heuristic fallback，不能 reject
 
 ---
 
@@ -251,33 +274,50 @@ async run(input) {
 Owner 待定。当前是 passthrough stub。两个候选方向：
 
 - **A — 预测维度展开**：把单一 riskScore 拆成多维（产量风险 / 价格风险 / 物流风险 / 法规风险），每个维度有独立分数。
-- **B — Pioneer 反向回灌**：调 `pioneer.getInsights(regionId)`，把自演化模型识别出的历史模式（"frost + market softness Q2"）作为附加 feature 加进 dashboard。
+- **B — Pioneer 特征分类**：调 `classify({text, task, labels})` 让 Pioneer 上训好的行业分类器给每条 driver 打标（"frost_event" / "demand_softness" / "regulation_change"…），输出更结构化的 feature payload。
 
 定义后请：
 1. 改 `FeatureInput` / `FeatureOutput` 类型
-2. 更新 `description` 让 Claude 知道何时调
+2. 更新 `description` 让 OpenAI 知道何时调
 3. 在 orchestrator 的 SYSTEM_PROMPT 里加一行 procedure（"4. After extraction_agent, call feature_agent..."）
 
 ---
 
 ## 7. Pioneer.ai 集成
 
-`src/lib/training/pioneer.ts` 已 stub。等 owner 给到：
-- API docs (endpoints, auth header format)
-- API key
+Pioneer.ai 是 **GLiNER2 实体分类推理服务**。Workflow：
 
-之后填两个函数体：
-- `recordCase(input, result)` — 每次 analyze 完毕异步记录（不要 block 主响应）
-- `getInsights(regionId)` — feature_agent 内部调用
+```
+[离线] data team 在 Pioneer 平台用葡萄酒行业数据训练分类器 → 得到 model_id
+        │
+[在线]  我们调 POST https://api.pioneer.ai/inference
+        ├─ 鉴权: X-API-Key
+        ├─ Body: { model_id, text, schema: { classifications: [{ task, labels }] } }
+        └─ 返回: { result: { <task>: <label> } }
+```
 
-建议在 `/api/analyze` 路由里 fire-and-forget 记录：
+Adapter `src/lib/training/pioneer.ts` 已实现，对外只暴露 **一个函数**：
 
 ```ts
-const result = await analyze(parsed.data);
-// 不 await，不影响响应延迟
-recordCase(parsed.data, result).catch((e) => console.warn("[pioneer]", e));
-return NextResponse.json(result);
+classify({
+  text: string,           // 待分类文本（短、结构化最佳）
+  task: string,           // 分类任务名，如 "risk_band"
+  labels: readonly string[],  // 闭集标签（必须和训练时一致）
+  modelId?: string,       // 覆盖默认 PIONEER_MODEL_ID
+  timeoutMs?: number,     // 默认 8000ms
+}): Promise<{ label: string | null; modelId: string; latencyMs: number } | null>
 ```
+
+**约定**：
+- 任何失败（缺 key、缺 model_id、超时、网络错误、不在 labels 内）都返回 `null` 或 `{label: null}`。**不抛错** —— caller 可以无脑 fallback 到启发式。
+- 调用方负责把 label 映射到业务语义（band → score、tag → driver kind 等）。
+
+**典型 caller**：`extraction_agent`（risk_band 分类）、`feature_agent`（driver 分类）。
+
+**Env 配置**：
+- `PIONEER_API_KEY` — Pioneer 控制台拿
+- `PIONEER_MODEL_ID` — 训完模型后 Pioneer 给的 id
+- `PIONEER_BASE_URL` — 默认 `https://api.pioneer.ai`，一般无需改
 
 ---
 
@@ -323,7 +363,7 @@ interface AnalyzeResult {
 ## 9. Demo Mode（不要破坏）
 
 `NEXT_PUBLIC_DEMO_MODE=true` 时：
-- Orchestrator 直接返回 `demoWineAnalysis(input)`，不调 Claude，不调 sub-agent。
+- Orchestrator 直接返回 `demoWineAnalysis(input)`，不调 OpenAI，不调 sub-agent。
 - 每个 sub-agent **应该**在 `run()` 开头检查 `isDemoMode` 并返回独立 fixture（虽然 orchestrator 已经短路，但单元测试时会用到）。
 
 **测试 demo mode：**

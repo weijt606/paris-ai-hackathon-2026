@@ -19,9 +19,18 @@ export interface FeatureOutput {
  * STUB — definition pending. Owner: TBD.
  *
  * Per session brief: feature-agent sits between extraction-agent and the
- * user dashboard, and is the surface where pioneer.ai's self-evolving
- * insights are folded back in. Concrete features (prediction widgets,
- * alerting thresholds, persona-specific lenses) are still being scoped.
+ * user dashboard, and is the surface where Pioneer.ai's wine-domain
+ * classifier is folded back in (see src/lib/training/pioneer.ts).
+ *
+ * Example consumer (drop into run() once features are scoped):
+ *
+ *     import { classify } from "@/lib/training/pioneer";
+ *     const cls = await classify({
+ *       text: `score=${input.riskScore}; drivers=${JSON.stringify(input.knobs)}`,
+ *       task: "risk_band",
+ *       labels: ["low", "moderate", "elevated", "high"],
+ *     });
+ *     // cls?.label gives the wine-domain-trained classifier's band
  *
  * The orchestrator wires this agent as an optional tool so it can be
  * implemented and enabled without changing the loop.

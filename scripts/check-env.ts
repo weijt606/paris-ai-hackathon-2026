@@ -16,23 +16,13 @@ interface Check {
 
 const checks: Check[] = [
   {
-    name: "Anthropic",
+    name: "OpenAI",
     required: true,
     run: async () => {
-      if (!process.env.ANTHROPIC_API_KEY)
-        return { ok: false, detail: "ANTHROPIC_API_KEY not set (orchestrator brain)" };
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "x-api-key": process.env.ANTHROPIC_API_KEY,
-          "anthropic-version": "2023-06-01",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          model: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-6",
-          max_tokens: 4,
-          messages: [{ role: "user", content: "ping" }],
-        }),
+      if (!process.env.OPENAI_API_KEY)
+        return { ok: false, detail: "OPENAI_API_KEY not set (orchestrator brain)" };
+      const res = await fetch("https://api.openai.com/v1/models", {
+        headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
       });
       return res.ok
         ? { ok: true, detail: `${res.status} OK` }
@@ -51,8 +41,11 @@ const checks: Check[] = [
     name: "Pioneer.ai",
     required: false,
     run: async () => {
-      if (!process.env.PIONEER_API_KEY) return { ok: false, detail: "PIONEER_API_KEY not set" };
-      return { ok: true, detail: "key present (adapter stub — verify once docs land)" };
+      if (!process.env.PIONEER_API_KEY)
+        return { ok: false, detail: "PIONEER_API_KEY not set" };
+      if (!process.env.PIONEER_MODEL_ID)
+        return { ok: false, detail: "PIONEER_MODEL_ID not set (train model first)" };
+      return { ok: true, detail: `key + model_id present (${process.env.PIONEER_MODEL_ID})` };
     },
   },
 ];
