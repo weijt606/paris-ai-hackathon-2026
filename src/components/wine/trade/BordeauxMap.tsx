@@ -9,6 +9,10 @@ import CHATEAUX from "@/lib/wine/chateaux-static.json";
 interface Props {
   selectedId: string;
   onSelect: (id: string, name: string) => void;
+  /** Currently focused château name (case-insensitive substring match against chateau.name). */
+  selectedChateau?: string | null;
+  /** Click handler on a single château dot. Pass null to clear selection. */
+  onChateauSelect?: (chateau: { name: string; aoc: string } | null) => void;
 }
 
 interface ChateauPoint {
@@ -38,9 +42,10 @@ function colorForScore(score: number): string {
   return "hsl(var(--chart-1))";
 }
 
-export function BordeauxMap({ selectedId, onSelect }: Props) {
+export function BordeauxMap({ selectedId, onSelect, selectedChateau, onChateauSelect }: Props) {
   const t = useT();
   const chateaux = CHATEAUX as ChateauPoint[];
+  const chateauNorm = (selectedChateau ?? "").toLowerCase();
 
   return (
     <figure className="rounded-md border bg-card p-6">
@@ -78,21 +83,40 @@ export function BordeauxMap({ selectedId, onSelect }: Props) {
             }
           </Geographies>
 
-          {/* 61 individual châteaux — informational dots, sized + coloured by 1855 growth */}
-          {chateaux.map((c) => (
-            <Marker key={c.name} coordinates={[c.lon, c.lat]}>
-              <circle
-                r={c.growth_num === 1 ? 2.6 : 1.7}
-                fill={GROWTH_COLORS[c.growth_num] ?? "hsl(var(--muted-foreground))"}
-                fillOpacity={c.growth_num <= 2 ? 0.9 : 0.7}
-                stroke="hsl(var(--background))"
-                strokeWidth={0.4}
-                style={{ pointerEvents: "auto" }}
-              >
-                <title>{`${c.name} · ${c.aoc} · ${c.growth}`}</title>
-              </circle>
-            </Marker>
-          ))}
+          {/* 61 individual châteaux — informational dots, sized + coloured by 1855 growth.
+              Clickable when onChateauSelect prop is wired. */}
+          {chateaux.map((c) => {
+            const isActive = chateauNorm.length > 0 && c.name.toLowerCase().includes(chateauNorm);
+            const baseR = c.growth_num === 1 ? 2.6 : 1.7;
+            const r = isActive ? baseR + 2 : baseR;
+            return (
+              <Marker key={c.name} coordinates={[c.lon, c.lat]}>
+                {isActive && (
+                  <circle
+                    r={r + 4}
+                    fill={GROWTH_COLORS[c.growth_num] ?? "hsl(var(--muted-foreground))"}
+                    fillOpacity={0.25}
+                  />
+                )}
+                <circle
+                  r={r}
+                  fill={GROWTH_COLORS[c.growth_num] ?? "hsl(var(--muted-foreground))"}
+                  fillOpacity={isActive ? 1 : c.growth_num <= 2 ? 0.9 : 0.7}
+                  stroke={isActive ? "hsl(var(--foreground))" : "hsl(var(--background))"}
+                  strokeWidth={isActive ? 0.9 : 0.4}
+                  className={onChateauSelect ? "cursor-pointer" : ""}
+                  style={{ pointerEvents: "auto", transition: "r 220ms ease-out" }}
+                  onClick={() => {
+                    if (!onChateauSelect) return;
+                    if (isActive) onChateauSelect(null);
+                    else onChateauSelect({ name: c.name, aoc: c.aoc });
+                  }}
+                >
+                  <title>{`${c.name} · ${c.aoc} · ${c.growth}`}</title>
+                </circle>
+              </Marker>
+            );
+          })}
 
           {/* 6 AOC aggregate markers (clickable — drives selection / analyze) */}
           {BORDEAUX_BENCHMARKS.map((b) => {

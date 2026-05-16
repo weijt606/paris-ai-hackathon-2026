@@ -42,6 +42,11 @@ export interface AnalyzeInput {
   question?: string;
   /** Metadata of vineyard-uploaded supporting docs (file contents not transmitted in MVP). */
   uploads?: UploadMeta[];
+  /**
+   * Optional explicit château selection (trade dashboard map click). When set,
+   * geo_agent switches to single-site mode; user intent wins over GPT routing.
+   */
+  chateau?: string;
 }
 
 /** Client-safe shape of the geo_agent's structured signals — surfaced on

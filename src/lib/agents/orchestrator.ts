@@ -102,6 +102,7 @@ export async function analyze(
     timeframe: input.timeframe,
     persona: input.persona,
     uploads: input.uploads,
+    chateau: input.chateau,
     signal: opts.signal ?? new AbortController().signal,
   };
 
@@ -113,6 +114,9 @@ export async function analyze(
     `Timeframe: ${input.timeframe.start} → ${input.timeframe.end}`,
     `Persona: ${input.persona}`,
     input.question ? `Refinement: ${input.question}` : "",
+    input.chateau
+      ? `Focus château: ${input.chateau} — call geo_agent in single-site mode by passing chateau="${input.chateau}".`
+      : "",
   ]
     .filter(Boolean)
     .join("\n");

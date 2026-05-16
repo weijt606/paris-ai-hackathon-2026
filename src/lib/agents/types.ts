@@ -27,6 +27,12 @@ export interface AgentContext {
    * call without going through the GPT tool-use routing layer.
    */
   uploads?: UploadMeta[];
+  /**
+   * Trade-side explicit château pick from the BordeauxMap. geo_agent prefers
+   * ctx.chateau over whatever GPT may pass as a tool argument — user intent
+   * wins over inferred routing.
+   */
+  chateau?: string;
   /** Aborts when the request is cancelled or the orchestrator times out. */
   signal: AbortSignal;
 }
