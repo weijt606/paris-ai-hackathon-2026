@@ -88,6 +88,7 @@ export interface TavilySignals {
   partial: boolean;
   report?: TavilyHarnessReport;
   errors?: TavilyHarnessError[];
+  results?: TavilyHarnessResult[];
 }
 
 type TavilySearchResult = {
@@ -107,6 +108,7 @@ const DEFAULT_MAX_RESULTS_PER_QUERY = 5;
 const MIN_TAVILY_SCORE = 0.2;
 const REQUEST_TIMEOUT_MS = 8000;
 const MAX_RETRIES = 1;
+const MAX_CONCURRENT_REQUESTS = 5;
 
 const SOURCE_WEIGHTS: Record<TavilySourceType, number> = {
   bordeaux_sentiment: 0.75,
@@ -209,6 +211,14 @@ function includesBlockedText(...parts: string[]): boolean {
   return BLOCKED_TERMS.some((term) => t.includes(term));
 }
 
+function audienceForSourceTypes(sourceTypes: TavilySourceType[]): TavilyTargetAudience[] {
+  return [...new Set(sourceTypes.flatMap((sourceType) => SOURCE_AUDIENCE[sourceType]))];
+}
+
+function maxSourceWeight(sourceTypes: TavilySourceType[]): number {
+  return Math.max(...sourceTypes.map((sourceType) => SOURCE_WEIGHTS[sourceType]));
+}
+
 function normalizeInput(input: TavilyInput, ctx?: AgentContext): NormalizedHarnessInput {
   const regionFromRegion = typeof input.region === "string" ? input.region : undefined;
   const regionFromId = typeof input.regionId === "string" && input.regionId.includes("bordeaux")
@@ -302,6 +312,13 @@ async function fetchTavily(
     timeout.signal.addEventListener("abort", onAbort, { once: true });
     signal?.addEventListener("abort", onAbort, { once: true });
     try {
+      const payload = {
+        query,
+        search_depth: "advanced",
+        max_results: maxResults,
+        include_answer: false,
+        include_raw_content: false,
+      };
       const res = await fetch("https://api.tavily.com/search", {
         method: "POST",
         signal: merged.signal,
@@ -309,14 +326,19 @@ async function fetchTavily(
           "content-type": "application/json",
           authorization: `Bearer ${env.TAVILY_API_KEY}`,
         },
-        body: JSON.stringify({
-          query,
-          search_depth: "advanced",
-          max_results: maxResults,
-          include_answer: false,
-          include_raw_content: false,
-        }),
+        body: JSON.stringify(payload),
       });
+      if (res.status === 401) {
+        const retryWithBodyKey = await fetch("https://api.tavily.com/search", {
+          method: "POST",
+          signal: merged.signal,
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ...payload, api_key: env.TAVILY_API_KEY }),
+        });
+        if (!retryWithBodyKey.ok) throw new Error(`Tavily HTTP ${retryWithBodyKey.status}`);
+        const body = (await retryWithBodyKey.json()) as TavilySearchResponse;
+        return body.results ?? [];
+      }
       if (!res.ok) throw new Error(`Tavily HTTP ${res.status}`);
       const body = (await res.json()) as TavilySearchResponse;
       return body.results ?? [];
@@ -368,56 +390,69 @@ function compactText(text: string, maxLength = 320): string {
   return cleaned.length <= maxLength ? cleaned : `${cleaned.slice(0, maxLength - 3)}...`;
 }
 
+async function runQueryPool(
+  queries: QuerySpec[],
+  worker: (spec: QuerySpec) => Promise<{ rows: TavilyHarnessResult[]; errors: TavilyHarnessError[] }>,
+): Promise<Array<{ rows: TavilyHarnessResult[]; errors: TavilyHarnessError[] }>> {
+  const results: Array<{ rows: TavilyHarnessResult[]; errors: TavilyHarnessError[] }> = [];
+  for (let i = 0; i < queries.length; i += MAX_CONCURRENT_REQUESTS) {
+    const batch = queries.slice(i, i + MAX_CONCURRENT_REQUESTS);
+    results.push(...(await Promise.all(batch.map(worker))));
+  }
+  return results;
+}
+
 export async function runTavilyHarness(
   rawInput: TavilyInput,
   opts: { signal?: AbortSignal } = {},
 ): Promise<TavilyHarnessOutput> {
   const input = normalizeInput(rawInput);
   const queries = buildQueries(input);
-  const settled = await Promise.all(
-    queries.map(async (spec) => {
+  const settled = await runQueryPool(
+    queries,
+    async (spec) => {
       const rowsForQuery: TavilyHarnessResult[] = [];
       const errorsForQuery: TavilyHarnessError[] = [];
-    try {
-      const rows = await fetchTavily(spec.query, input.maxResultsPerQuery, opts.signal);
-      for (const row of rows) {
-        const url = row.url ?? "";
-        const normalized = normalizeUrl(url);
-        const domain = domainOf(url);
-        const sourceWeight = SOURCE_WEIGHTS[spec.sourceType];
-        const dWeight = domainWeight(domain);
-        const score = clampScore(row.score ?? 0);
-        rowsForQuery.push({
+      try {
+        const rows = await fetchTavily(spec.query, input.maxResultsPerQuery, opts.signal);
+        for (const row of rows) {
+          const url = row.url ?? "";
+          const normalized = normalizeUrl(url);
+          const domain = domainOf(url);
+          const sourceWeight = SOURCE_WEIGHTS[spec.sourceType];
+          const dWeight = domainWeight(domain);
+          const score = clampScore(row.score ?? 0);
+          rowsForQuery.push({
+            year: spec.year,
+            region: "Bordeaux",
+            sourceType: spec.sourceType,
+            targetAudience: SOURCE_AUDIENCE[spec.sourceType],
+            query: spec.query,
+            title: row.title ?? "",
+            url,
+            normalizedUrl: normalized,
+            domain,
+            score,
+            content: row.content ?? "",
+            sourceWeight,
+            domainWeight: dWeight,
+            finalScore: clampScore(score * sourceWeight * dWeight),
+            hitCount: 1,
+            matchedQueries: [spec.query],
+            matchedYears: [spec.year],
+            matchedSourceTypes: [spec.sourceType],
+          });
+        }
+      } catch (err) {
+        errorsForQuery.push({
           year: spec.year,
-          region: "Bordeaux",
           sourceType: spec.sourceType,
-          targetAudience: SOURCE_AUDIENCE[spec.sourceType],
           query: spec.query,
-          title: row.title ?? "",
-          url,
-          normalizedUrl: normalized,
-          domain,
-          score,
-          content: row.content ?? "",
-          sourceWeight,
-          domainWeight: dWeight,
-          finalScore: clampScore(score * sourceWeight * dWeight),
-          hitCount: 1,
-          matchedQueries: [spec.query],
-          matchedYears: [spec.year],
-          matchedSourceTypes: [spec.sourceType],
+          error: err instanceof Error ? err.message : String(err),
         });
       }
-    } catch (err) {
-      errorsForQuery.push({
-        year: spec.year,
-        sourceType: spec.sourceType,
-        query: spec.query,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
       return { rows: rowsForQuery, errors: errorsForQuery };
-    }),
+    },
   );
 
   const errors = settled.flatMap((item) => item.errors);
@@ -440,6 +475,9 @@ export async function runTavilyHarness(
     winner.matchedSourceTypes = [
       ...new Set([...existing.matchedSourceTypes, ...loser.matchedSourceTypes]),
     ];
+    winner.targetAudience = audienceForSourceTypes(winner.matchedSourceTypes);
+    winner.sourceWeight = maxSourceWeight(winner.matchedSourceTypes);
+    winner.finalScore = clampScore(winner.score * winner.sourceWeight * winner.domainWeight);
     deduped.set(row.normalizedUrl, winner);
   }
 
@@ -596,6 +634,7 @@ export const tavilyAgent: SubAgent<TavilyInput, TavilySignals> = {
           partial: out.report.errorCount > 0 || signals.length === 0,
           report: out.report,
           errors: out.errors.slice(0, 5),
+          results: out.results,
         },
         summary: `${out.report.afterUrlDedupe} deduped hits`,
       };
