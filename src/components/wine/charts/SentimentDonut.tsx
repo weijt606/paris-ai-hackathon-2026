@@ -49,9 +49,9 @@ export function SentimentDonut({ regionId }: { regionId: string }) {
           />
         </PieChart>
       </ResponsiveContainer>
-      <div className="mt-1 flex justify-center gap-5 text-[10px] uppercase tracking-luxe text-muted-foreground">
+      <div className="mt-1 flex flex-wrap justify-center gap-x-4 gap-y-1 text-[10px] uppercase tracking-luxe text-muted-foreground">
         {data.map((d) => (
-          <span key={d.label} className="inline-flex items-center gap-1.5">
+          <span key={d.label} className="inline-flex items-center gap-1.5 whitespace-nowrap">
             <span
               className="inline-block h-1.5 w-1.5 rounded-full"
               style={{ background: COLORS[d.label] }}

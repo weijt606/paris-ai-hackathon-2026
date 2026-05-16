@@ -4,18 +4,18 @@ import { useState } from "react";
 import { useT } from "@/lib/i18n/Provider";
 import { RegionPicker } from "@/components/wine/RegionPicker";
 import { RiskCard } from "@/components/wine/RiskCard";
-import { SignalsList } from "@/components/wine/SignalsList";
 import { UploadArea } from "@/components/wine/vineyard/UploadArea";
 import { DriverDonutChart } from "@/components/wine/charts/DriverDonutChart";
 import { WeatherLineChart } from "@/components/wine/charts/WeatherLineChart";
 import { ExportButton } from "@/components/wine/shared/ExportButton";
 import { SubscribeDialog } from "@/components/wine/shared/SubscribeDialog";
 import { TimeframePicker } from "@/components/wine/shared/TimeframePicker";
+import { WorkflowTrace } from "@/components/wine/shared/WorkflowTrace";
+import { useAnalysisFlow } from "@/lib/hooks/useAnalysisFlow";
 import { REGIONS } from "@/lib/wine/regions";
-import type { AnalyzeInput, AnalyzeResult, Region, Timeframe, UploadMeta } from "@/lib/wine/types";
+import type { AnalyzeInput, Region, Timeframe, UploadMeta } from "@/lib/wine/types";
 
 function defaultTimeframe(): Timeframe {
-  // Default: current calendar (natural) year forecast.
   const year = new Date().getFullYear();
   return { start: `${year}-01-01`, end: `${year}-12-31` };
 }
@@ -31,36 +31,17 @@ export function VineyardDashboard() {
   const [timeframe, setTimeframe] = useState(defaultTimeframe);
   const [question, setQuestion] = useState("");
   const [uploads, setUploads] = useState<UploadMeta[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<AnalyzeResult | null>(null);
+  const { workflowState, details, result, loading, error, run } = useAnalysisFlow();
 
-  async function run() {
-    setLoading(true);
-    setError(null);
-    try {
-      const body: AnalyzeInput = {
-        region,
-        timeframe,
-        persona: "vineyard",
-        question: question.trim() || undefined,
-        uploads: uploads.length > 0 ? uploads : undefined,
-      };
-      const res = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: unknown };
-        throw new Error(typeof j.error === "string" ? j.error : `HTTP ${res.status}`);
-      }
-      setResult((await res.json()) as AnalyzeResult);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Analysis failed");
-    } finally {
-      setLoading(false);
-    }
+  function handleRun() {
+    const body: AnalyzeInput = {
+      region,
+      timeframe,
+      persona: "vineyard",
+      question: question.trim() || undefined,
+      uploads: uploads.length > 0 ? uploads : undefined,
+    };
+    void run(body);
   }
 
   return (
@@ -86,13 +67,11 @@ export function VineyardDashboard() {
       <div className="grid gap-8 lg:grid-cols-[360px_1fr]">
         <aside className="space-y-6 print:hidden">
           <RegionPicker value={region.id} onChange={setRegion} />
-
           <TimeframePicker value={timeframe} onChange={setTimeframe} />
-
           <UploadArea uploads={uploads} onChange={setUploads} />
 
           <label className="flex flex-col gap-1 text-sm">
-            <span className="text-xs uppercase tracking-wide text-muted-foreground">
+            <span className="text-[10px] uppercase tracking-luxe text-muted-foreground">
               {t("common.question_placeholder").split("：")[0] ??
                 t("common.question_placeholder")}
             </span>
@@ -107,7 +86,7 @@ export function VineyardDashboard() {
 
           <button
             type="button"
-            onClick={run}
+            onClick={handleRun}
             disabled={loading}
             className="w-full rounded-sm bg-primary px-4 py-3 text-[11px] uppercase tracking-luxe text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
           >
@@ -119,28 +98,22 @@ export function VineyardDashboard() {
               {error}
             </div>
           )}
+
+          {/* Agent workflow visualisation lives in the sidebar so the user
+              sees the agents fire as soon as Run is clicked. */}
+          <WorkflowTrace state={workflowState} details={details} />
         </aside>
 
-        <section className="space-y-6">
+        <section className="space-y-8">
           {result ? (
             <>
               <RiskCard result={result} />
-              <div className="grid gap-6 md:grid-cols-2">
-                <DriverDonutChart drivers={result.drivers} />
-                <WeatherLineChart regionId={result.region.id} />
-              </div>
-              <div>
-                <h3 className="mb-3 text-xs font-medium uppercase tracking-widest text-muted-foreground">
-                  {t("result.trace")}
-                </h3>
-                <SignalsList trace={result.trace} />
-              </div>
+              <DriverDonutChart drivers={result.drivers} />
+              <WeatherLineChart regionId={result.region.id} />
             </>
           ) : (
             <div className="rounded-xl border border-dashed p-12 text-center">
-              <p className="text-sm text-muted-foreground">
-                {t("vineyard.subtitle")}
-              </p>
+              <p className="text-sm text-muted-foreground">{t("vineyard.subtitle")}</p>
             </div>
           )}
         </section>
