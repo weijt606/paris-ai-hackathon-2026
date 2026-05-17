@@ -1,6 +1,6 @@
 {
   "exportedAt": "2026-05-16T14:46:06.227Z",
-  "sourceDatabase": "/Users/xinleichen/Documents/paris-ai-hackathon-2026/data/.cache/tavily-search.sqlite",
+  "sourceDatabase": "data/.cache/tavily-search.sqlite",
   "includeExpired": false,
   "totalEntries": 15,
   "entries": [

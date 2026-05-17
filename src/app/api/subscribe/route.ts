@@ -21,9 +21,29 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
   // TODO(dev): wire a real mail provider once a sponsor key is available.
+  // We log the submission shape (not the raw email) so the dev console
+  // confirms the route fired without leaking subscriber PII into shared
+  // terminals / log aggregators.
+  const masked = maskEmail(parsed.data.email);
   console.log(
     "[subscribe] stub recorded:",
-    JSON.stringify({ ...parsed.data, at: new Date().toISOString() }),
+    JSON.stringify({
+      email: masked,
+      regionId: parsed.data.regionId,
+      persona: parsed.data.persona,
+      at: new Date().toISOString(),
+    }),
   );
   return NextResponse.json({ ok: true, stub: true });
+}
+
+/** "alice@example.com" → "a***e@example.com" — keep enough for debugging
+ *  routing issues without exposing the full subscriber address. */
+function maskEmail(email: string): string {
+  const at = email.indexOf("@");
+  if (at < 1) return "***";
+  const local = email.slice(0, at);
+  const domain = email.slice(at);
+  if (local.length <= 2) return `${local[0]}***${domain}`;
+  return `${local[0]}***${local[local.length - 1]}${domain}`;
 }
