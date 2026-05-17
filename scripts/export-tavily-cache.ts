@@ -129,7 +129,9 @@ async function main() {
     JSON.stringify(
       {
         exportedAt: new Date().toISOString(),
-        sourceDatabase: dbPath,
+        // Store the project-relative path so the committed export doesn't
+        // leak the contributor's home directory / OS username.
+        sourceDatabase: dbPath.startsWith(cwd) ? dbPath.slice(cwd.length + 1) : dbPath,
         includeExpired,
         totalEntries: entries.length,
         entries,
